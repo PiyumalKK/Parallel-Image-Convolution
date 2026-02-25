@@ -1,4 +1,12 @@
-// 10x10 Gaussian kernel
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <time.h>
+#include <string.h>
+#include <omp.h>
+#include "../include/image_utils.h"
+
+// Define convolution kernels
 float gaussian_blur_10x10[100] = {
     1, 4, 7, 10, 12, 12, 10, 7, 4, 1,
     4, 16, 26, 36, 44, 44, 36, 26, 16, 4,
@@ -11,35 +19,6 @@ float gaussian_blur_10x10[100] = {
     4, 16, 26, 36, 44, 44, 36, 26, 16, 4,
     1, 4, 7, 10, 12, 12, 10, 7, 4, 1
 };
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include <time.h>
-#include <string.h>
-#include "../include/image_utils.h"
-
-// Define convolution kernels
-float gaussian_blur_3x3[9] = {
-    1.0/16, 2.0/16, 1.0/16,
-    2.0/16, 4.0/16, 2.0/16,
-    1.0/16, 2.0/16, 1.0/16
-};
-
-float gaussian_blur_5x5[25] = {
-    1,  4,  6,  4, 1,
-    4, 16, 24, 16, 4,
-    6, 24, 36, 24, 6,
-    4, 16, 24, 16, 4,
-    1,  4,  6,  4, 1
-};
-
-// Normalize kernel
-void normalize_kernel(float *kernel, int size) {
-    float sum = 0.0f;
-    for (int i = 0; i < size * size; i++) sum += kernel[i];
-    for (int i = 0; i < size * size; i++) kernel[i] /= sum;
-}
 float edge_detection_3x3[9] = { -1, -1, -1, -1, 8, -1, -1, -1, -1 };
 float sharpen_3x3[9] = {
     0, -1, 0,
@@ -47,7 +26,12 @@ float sharpen_3x3[9] = {
     0, -1, 0
 };
 
-// Apply convolution to single pixel
+void normalize_kernel(float *kernel, int size) {
+    float sum = 0.0f;
+    for (int i = 0; i < size * size; i++) sum += kernel[i];
+    for (int i = 0; i < size * size; i++) kernel[i] /= sum;
+}
+
 unsigned char apply_kernel(Image *img, int x, int y, int channel, float *kernel, int kernel_size) {
     float sum = 0.0;
     int half_size = kernel_size / 2;
@@ -55,7 +39,6 @@ unsigned char apply_kernel(Image *img, int x, int y, int channel, float *kernel,
         for (int kx = -half_size; kx <= half_size; kx++) {
             int img_x = x + kx;
             int img_y = y + ky;
-            // Handle borders (clamp to edge)
             if (img_x < 0) img_x = 0;
             if (img_x >= img->width) img_x = img->width - 1;
             if (img_y < 0) img_y = 0;
@@ -65,14 +48,12 @@ unsigned char apply_kernel(Image *img, int x, int y, int channel, float *kernel,
             sum += img->data[img_index] * kernel[kernel_index];
         }
     }
-    // Clamp result to [0, 255]
     if (sum < 0) sum = 0;
     if (sum > 255) sum = 255;
     return (unsigned char)sum;
 }
 
-// Main serial convolution function
-Image* convolve_serial(Image *input, float *kernel, int kernel_size) {
+Image* convolve_openmp(Image *input, float *kernel, int kernel_size) {
     Image *output = (Image*)malloc(sizeof(Image));
     output->width = input->width;
     output->height = input->height;
@@ -80,7 +61,7 @@ Image* convolve_serial(Image *input, float *kernel, int kernel_size) {
     output->data = (unsigned char*)malloc(
         input->width * input->height * input->channels
     );
-    // Process each pixel
+    #pragma omp parallel for collapse(2)
     for (int y = 0; y < input->height; y++) {
         for (int x = 0; x < input->width; x++) {
             for (int c = 0; c < input->channels; c++) {
@@ -98,10 +79,8 @@ int main(int argc, char *argv[]) {
         printf("filter_type: blur, edge, sharpen\n");
         return 1;
     }
-    // Load image
     Image *input = load_image(argv[1]);
     if (!input) return 1;
-    // Select kernel
     float *kernel;
     int kernel_size;
     int blur_iterations = 1;
@@ -117,20 +96,17 @@ int main(int argc, char *argv[]) {
         kernel = sharpen_3x3;
         kernel_size = 3;
     }
-    // Perform convolution and measure time
     clock_t start = clock();
     Image *output = input;
     for (int i = 0; i < blur_iterations; i++) {
-        Image *temp = convolve_serial(output, kernel, kernel_size);
-        if (i > 0) free_image(output);
+        Image *temp = convolve_openmp(output, kernel, kernel_size);
+        if (output != input) free_image(output);
         output = temp;
     }
     clock_t end = clock();
     double time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
-    printf("Serial convolution took: %.4f seconds\n", time_taken);
-    // Save result
+    printf("OpenMP convolution took: %.4f seconds\n", time_taken);
     save_image(argv[2], output);
-    // Cleanup
     free_image(input);
     if (output != input) free_image(output);
     return 0;
