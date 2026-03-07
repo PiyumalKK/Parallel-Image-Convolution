@@ -6,19 +6,22 @@
 #include <omp.h>
 #include "../include/image_utils.h"
 
-// Define convolution kernels
-float gaussian_blur_10x10[100] = {
-    1, 4, 7, 10, 12, 12, 10, 7, 4, 1,
-    4, 16, 26, 36, 44, 44, 36, 26, 16, 4,
-    7, 26, 41, 56, 68, 68, 56, 41, 26, 7,
-    10, 36, 56, 76, 92, 92, 76, 56, 36, 10,
-    12, 44, 68, 92, 112, 112, 92, 68, 44, 12,
-    12, 44, 68, 92, 112, 112, 92, 68, 44, 12,
-    10, 36, 56, 76, 92, 92, 76, 56, 36, 10,
-    7, 26, 41, 56, 68, 68, 56, 41, 26, 7,
-    4, 16, 26, 36, 44, 44, 36, 26, 16, 4,
-    1, 4, 7, 10, 12, 12, 10, 7, 4, 1
-};
+// Generate a true normalized Gaussian kernel (size must be odd)
+float* generate_gaussian_kernel(int size, float sigma) {
+    float *kernel = (float*)malloc(size * size * sizeof(float));
+    int half = size / 2;
+    float sum = 0.0f;
+    for (int y = -half; y <= half; y++) {
+        for (int x = -half; x <= half; x++) {
+            float value = expf(-(x*x + y*y) / (2.0f * sigma * sigma));
+            kernel[(y + half) * size + (x + half)] = value;
+            sum += value;
+        }
+    }
+    for (int i = 0; i < size * size; i++) kernel[i] /= sum;
+    return kernel;
+}
+
 float edge_detection_3x3[9] = { -1, -1, -1, -1, 8, -1, -1, -1, -1 };
 float sharpen_3x3[9] = {
     0, -1, 0,
@@ -26,17 +29,12 @@ float sharpen_3x3[9] = {
     0, -1, 0
 };
 
-void normalize_kernel(float *kernel, int size) {
-    float sum = 0.0f;
-    for (int i = 0; i < size * size; i++) sum += kernel[i];
-    for (int i = 0; i < size * size; i++) kernel[i] /= sum;
-}
-
+// Apply convolution to a single pixel
 unsigned char apply_kernel(Image *img, int x, int y, int channel, float *kernel, int kernel_size) {
-    float sum = 0.0;
-    int half_size = kernel_size / 2;
-    for (int ky = -half_size; ky <= half_size; ky++) {
-        for (int kx = -half_size; kx <= half_size; kx++) {
+    float sum = 0.0f;
+    int half = kernel_size / 2;
+    for (int ky = -half; ky <= half; ky++) {
+        for (int kx = -half; kx <= half; kx++) {
             int img_x = x + kx;
             int img_y = y + ky;
             if (img_x < 0) img_x = 0;
@@ -44,7 +42,7 @@ unsigned char apply_kernel(Image *img, int x, int y, int channel, float *kernel,
             if (img_y < 0) img_y = 0;
             if (img_y >= img->height) img_y = img->height - 1;
             int img_index = (img_y * img->width + img_x) * img->channels + channel;
-            int kernel_index = (ky + half_size) * kernel_size + (kx + half_size);
+            int kernel_index = (ky + half) * kernel_size + (kx + half);
             sum += img->data[img_index] * kernel[kernel_index];
         }
     }
@@ -53,6 +51,7 @@ unsigned char apply_kernel(Image *img, int x, int y, int channel, float *kernel,
     return (unsigned char)sum;
 }
 
+// OpenMP parallel convolution
 Image* convolve_openmp(Image *input, float *kernel, int kernel_size) {
     Image *output = (Image*)malloc(sizeof(Image));
     output->width = input->width;
@@ -61,7 +60,8 @@ Image* convolve_openmp(Image *input, float *kernel, int kernel_size) {
     output->data = (unsigned char*)malloc(
         input->width * input->height * input->channels
     );
-    #pragma omp parallel for collapse(2)
+    // Parallelize the outer two loops across all available threads
+    #pragma omp parallel for collapse(2) schedule(dynamic)
     for (int y = 0; y < input->height; y++) {
         for (int x = 0; x < input->width; x++) {
             for (int c = 0; c < input->channels; c++) {
@@ -81,14 +81,16 @@ int main(int argc, char *argv[]) {
     }
     Image *input = load_image(argv[1]);
     if (!input) return 1;
+
     float *kernel;
     int kernel_size;
-    int blur_iterations = 1;
+    int is_blur = 0;
+
     if (strcmp(argv[3], "blur") == 0) {
-        normalize_kernel(gaussian_blur_10x10, 10);
-        kernel = gaussian_blur_10x10;
-        kernel_size = 10;
-        blur_iterations = 10; // Apply blur 10 times for maximum effect
+        kernel_size = 21;      // same as serial
+        float sigma = 7.0f;    // same as serial
+        kernel = generate_gaussian_kernel(kernel_size, sigma);
+        is_blur = 1;
     } else if (strcmp(argv[3], "edge") == 0) {
         kernel = edge_detection_3x3;
         kernel_size = 3;
@@ -96,18 +98,20 @@ int main(int argc, char *argv[]) {
         kernel = sharpen_3x3;
         kernel_size = 3;
     }
-    clock_t start = clock();
-    Image *output = input;
-    for (int i = 0; i < blur_iterations; i++) {
-        Image *temp = convolve_openmp(output, kernel, kernel_size);
-        if (output != input) free_image(output);
-        output = temp;
-    }
-    clock_t end = clock();
-    double time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
-    printf("OpenMP convolution took: %.4f seconds\n", time_taken);
+
+    printf("Running OpenMP with %d threads\n", omp_get_max_threads());
+
+    double start = omp_get_wtime();
+    Image *output = convolve_openmp(input, kernel, kernel_size);
+    double end = omp_get_wtime();
+
+    printf("OpenMP convolution took: %.4f seconds\n", end - start);
+
     save_image(argv[2], output);
+
     free_image(input);
-    if (output != input) free_image(output);
+    free_image(output);
+    if (is_blur) free(kernel);
+
     return 0;
 }
