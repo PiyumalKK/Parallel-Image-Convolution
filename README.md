@@ -85,7 +85,7 @@ $env:OMP_NUM_THREADS = 8
 
 ### 3. CUDA (GPU)
 
-#### Windows Setup (one-time)
+#### Windows Setup
 
 `nvcc` requires the MSVC compiler (`cl.exe`). Add the MSVC `cl.exe` directory to your system **PATH**:
 
