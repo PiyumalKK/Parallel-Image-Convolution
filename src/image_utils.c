@@ -1,8 +1,24 @@
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image.h"
 #include "stb_image_write.h"
 #include "image_utils.h"
+
+// Recursively create directories for the given file path
+static void ensure_parent_dirs(const char *filepath) {
+    char *path = strdup(filepath);
+    for (char *p = path + 1; *p; p++) {
+        if (*p == '/' || *p == '\\') {
+            *p = '\0';
+            mkdir(path, 0755);
+            *p = '/';
+        }
+    }
+    free(path);
+}
 
 Image* load_image(const char *filename) {
     Image *img = (Image*)malloc(sizeof(Image));
@@ -17,6 +33,7 @@ Image* load_image(const char *filename) {
 }
 
 void save_image(const char *filename, Image *img) {
+    ensure_parent_dirs(filename);
     stbi_write_png(filename, img->width, img->height, img->channels, img->data, img->width * img->channels);
 }
 
