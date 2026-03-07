@@ -15,3 +15,9 @@ images/output/
 # Build artifacts
 *.a
 *.so
+
+# Visual Studio / VS Code
+.vs/
+*.vcxproj.user
+*.suo
+*.sln.docstates
