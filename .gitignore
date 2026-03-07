@@ -1,0 +1,17 @@
+# Compiled binaries
+convolution_serial
+convolution_openmp
+convolution_pthreads
+convolution_mpi
+convolution_cuda
+convolution_hybrid
+*.o
+*.out
+*.exe
+
+# Output images
+images/output/
+
+# Build artifacts
+*.a
+*.so
