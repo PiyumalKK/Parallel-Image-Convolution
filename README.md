@@ -5,21 +5,33 @@ Image convolution implemented using three parallelization approaches — **Seria
 ## Project Structure
 
 ```
+project/
+│
 ├── src/
-│   ├── image_utils.c            # Image load/save using stb_image
+│   ├── image_utils.c              # Image load/save using stb_image
+│   |
 │   ├── serial/
-│   │   └── convolution_serial.c # Single-threaded CPU implementation
+│   │   └── convolution_serial.c   # Single-threaded CPU implementation
+│   |
 │   ├── openmp/
-│   │   └── convolution_openmp.c # Multi-threaded CPU with OpenMP
+│   │   └── convolution_openmp.c   # Multi-threaded CPU with OpenMP
+│   |
+│   ├── mpi/
+│   │   └── convolution_mpi.c      # Distributed-memory parallel with MPI
+│   |
 │   └── cuda/
-│       └── convolution_cuda.cu  # GPU-accelerated with CUDA
+│       └── convolution_cuda.cu    # GPU implementation using CUDA
+│
 ├── include/
-│   ├── image_utils.h            # Image struct and function declarations
-│   ├── stb_image.h              # stb image loading library
-│   └── stb_image_write.h        # stb image writing library
+│   ├── image_utils.h              # Image struct and function declarations
+│   ├── stb_image.h                # stb image loading library
+│   └── stb_image_write.h          # stb image writing library
+│
 └── images/
-    ├── input/                   # Place input images here
-    └── output/                  # Processed images are saved here
+    ├── input/                     # Place input images here
+    │   └── test.jpg
+    │
+    └── output/                    # Processed images saved here
 ```
 
 ## Supported Filters
@@ -83,9 +95,34 @@ $env:OMP_NUM_THREADS = 8
 
 ---
 
+### 2. MPI (Distributed-memory CPU)
+
+**Compile:**
+```bash
+mpicc -o convolution_mpi src/mpi/convolution_mpi.c src/image_utils.c -I include -lm
+```
+
+**Run:**
+```bash
+mpirun -np 4 ./convolution_mpi images/input/test.jpg images/output/result_mpi.jpg blur
+```
+
+You can control the number of process using the -np option:
+
+```bash
+# Linux/macOS
+# Run with 4 processes
+mpirun -np 4 ./convolution_mpi images/input/test.jpg images/output/result_mpi.jpg blur
+
+# Run with 8 processes
+mpirun -np 8 ./convolution_mpi images/input/test.jpg images/output/result_mpi.jpg blur
+```
+
+---
+
 ### 3. CUDA (GPU)
 
-#### Windows Setup (one-time)
+#### Windows Setup
 
 `nvcc` requires the MSVC compiler (`cl.exe`). Add the MSVC `cl.exe` directory to your system **PATH**:
 
