@@ -29,7 +29,9 @@ project/
 │
 └── images/
     ├── input/                     # Place input images here
-    │   └── test.jpg
+    │   ├── test.jpg               # Input image for blur
+    │   ├── test_edge.jpg          # Input image for edge detection
+    │   └── test_sharp.jpg         # Input image for sharpening
     │
     └── output/                    # Processed images saved here
 ```
@@ -67,7 +69,14 @@ gcc -o convolution_serial src/serial/convolution_serial.c src/image_utils.c -I i
 
 **Run:**
 ```bash
-./convolution_serial images/input/test.jpg images/output/result_serial.jpg blur
+# Blur
+./convolution_serial images/input/test.jpg images/output/blur_serial.jpg blur
+
+# Edge Detection
+./convolution_serial images/input/test_edge.jpg images/output/edge_serial.jpg edge
+
+# Sharpen
+./convolution_serial images/input/test_sharp.jpg images/output/sharp_serial.jpg sharpen
 ```
 
 ---
@@ -81,7 +90,14 @@ gcc -fopenmp -o convolution_openmp src/openmp/convolution_openmp.c src/image_uti
 
 **Run:**
 ```bash
-./convolution_openmp images/input/test.jpg images/output/result_openmp.jpg blur
+# Blur
+./convolution_openmp images/input/test.jpg images/output/blur_openmp.jpg blur
+
+# Edge Detection
+./convolution_openmp images/input/test_edge.jpg images/output/edge_openmp.jpg edge
+
+# Sharpen
+./convolution_openmp images/input/test_sharp.jpg images/output/sharp_openmp.jpg sharpen
 ```
 
 You can control the number of threads with the `OMP_NUM_THREADS` environment variable:
@@ -104,7 +120,14 @@ mpicc -o convolution_mpi src/mpi/convolution_mpi.c src/image_utils.c -I include 
 
 **Run:**
 ```bash
-mpirun -np 4 ./convolution_mpi images/input/test.jpg images/output/result_mpi.jpg blur
+# Blur
+mpirun -np 4 ./convolution_mpi images/input/test.jpg images/output/blur_mpi.jpg blur
+
+# Edge Detection
+mpirun -np 4 ./convolution_mpi images/input/test_edge.jpg images/output/edge_mpi.jpg edge
+
+# Sharpen
+mpirun -np 4 ./convolution_mpi images/input/test_sharp.jpg images/output/sharp_mpi.jpg sharpen
 ```
 
 You can control the number of process using the -np option:
@@ -112,10 +135,10 @@ You can control the number of process using the -np option:
 ```bash
 # Linux/macOS
 # Run with 4 processes
-mpirun -np 4 ./convolution_mpi images/input/test.jpg images/output/result_mpi.jpg blur
+mpirun -np 4 ./convolution_mpi images/input/test.jpg images/output/blur_mpi.jpg blur
 
 # Run with 8 processes
-mpirun -np 8 ./convolution_mpi images/input/test.jpg images/output/result_mpi.jpg blur
+mpirun -np 8 ./convolution_mpi images/input/test.jpg images/output/blur_mpi.jpg blur
 ```
 
 ---
@@ -147,7 +170,14 @@ nvcc -allow-unsupported-compiler -o convolution_cuda src/cuda/convolution_cuda.c
 
 **Run:**
 ```bash
-./convolution_cuda images/input/test.jpg images/output/result_cuda.jpg blur
+# Blur
+./convolution_cuda images/input/test.jpg images/output/blur_cuda.jpg blur
+
+# Edge Detection
+./convolution_cuda images/input/test_edge.jpg images/output/edge_cuda.jpg edge
+
+# Sharpen
+./convolution_cuda images/input/test_sharp.jpg images/output/sharp_cuda.jpg sharpen
 ```
 
 ---
@@ -166,7 +196,53 @@ nvcc -allow-unsupported-compiler -o convolution_cuda src/cuda/convolution_cuda.c
 
 **Examples:**
 ```bash
-./convolution_serial  images/input/test.jpg images/output/blur_serial.jpg  blur
-./convolution_openmp  images/input/test.jpg images/output/edge_openmp.jpg  edge
-./convolution_cuda    images/input/test.jpg images/output/sharp_cuda.jpg   sharpen
+# Serial — all filters
+./convolution_serial images/input/test.jpg images/output/blur_serial.jpg blur
+./convolution_serial images/input/test_edge.jpg images/output/edge_serial.jpg edge
+./convolution_serial images/input/test_sharp.jpg images/output/sharp_serial.jpg sharpen
+
+# OpenMP — all filters
+./convolution_openmp images/input/test.jpg images/output/blur_openmp.jpg blur
+./convolution_openmp images/input/test_edge.jpg images/output/edge_openmp.jpg edge
+./convolution_openmp images/input/test_sharp.jpg images/output/sharp_openmp.jpg sharpen
+
+./convolution_cuda images/input/test_sharp.jpg images/output/sharp_cuda.jpg sharpen
 ```
+
+---
+
+## Performance Comparison
+
+**Test Environment:**
+- **CPU:** 4 cores (WSL2 on Azure VM)
+- **GPU:** NVIDIA Tesla T4 (2,560 CUDA cores, 16 GB VRAM)
+- **OpenMP Threads:** 4
+- **MPI Processes:** 4
+
+### Execution Time (seconds)
+
+| Filter   | Kernel Size | Serial   | OpenMP (4T) | MPI (4P) | CUDA (T4) |
+|----------|-------------|----------|-------------|----------|------------|
+| Blur     | 21×21       | 75.2188  | 19.0556     | 19.0895  | 0.1115     |
+| Edge     | 3×3         | 1.9531   | 0.8603      | 0.5196   | 0.0134     |
+| Sharpen  | 3×3         | 0.2500   | 0.1412      | 0.0932   | 0.0044     |
+
+### Speedup vs Serial (×)
+
+| Filter   | OpenMP | MPI   | CUDA     |
+|----------|--------|-------|----------|
+| Blur     | 3.95×  | 3.94× | 674.6×   |
+| Edge     | 2.27×  | 3.76× | 145.8×   |
+| Sharpen  | 1.77×  | 2.68× | 56.8×    |
+
+### Key Observations
+
+1. **CUDA dominates on large workloads** — For the blur filter (21×21 kernel), CUDA is **~675× faster** than serial, processing the image in just 0.11 seconds vs 75 seconds.
+
+2. **OpenMP and MPI perform similarly** — Both achieve ~4× speedup on blur with 4 cores/processes, which is near the theoretical maximum for 4 parallel workers.
+
+3. **Kernel size matters** — The blur filter (21×21 = 441 operations per pixel) benefits the most from parallelization. The sharpen filter (3×3 = 9 operations per pixel) has less work per pixel, so the overhead of parallelization reduces the relative speedup.
+
+4. **GPU overhead is visible on small workloads** — CUDA's speedup drops from 675× (blur) to 57× (sharpen) because the data transfer between CPU and GPU becomes a larger fraction of total time when the computation per pixel is small.
+
+5. **MPI edges out OpenMP on small kernels** — For edge detection and sharpen, MPI slightly outperforms OpenMP, likely due to differences in scheduling and memory access patterns.
