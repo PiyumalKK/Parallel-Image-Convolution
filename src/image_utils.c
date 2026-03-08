@@ -3,9 +3,9 @@
 #include <sys/types.h>
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image.h"
-#include "stb_image_write.h"
-#include "image_utils.h"
+#include "../include/stb_image.h"
+#include "../include/stb_image_write.h"
+#include "../include/image_utils.h"
 
 // Recursively create directories for the given file path
 static void ensure_parent_dirs(const char *filepath) {
