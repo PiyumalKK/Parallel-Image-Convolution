@@ -53,3 +53,34 @@ unsigned char apply_kernel(Image *img, int x, int y, int channel,
     if (sum > 255) sum = 255;
     return (unsigned char)sum;
 }
+
+// ─── Thread argument struct ───────────────────────────────────────────────────
+
+typedef struct {
+    Image        *input;
+    Image        *output;
+    float        *kernel;
+    int           kernel_size;
+    int           start_row;
+    int           end_row;
+} ThreadArgs;
+
+// ─── Thread worker: processes assigned rows ───────────────────────────────────
+
+void* convolve_worker(void *arg) {
+    ThreadArgs *args = (ThreadArgs*)arg;
+    Image *input      = args->input;
+    Image *output     = args->output;
+    float *kernel     = args->kernel;
+    int kernel_size   = args->kernel_size;
+
+    for (int y = args->start_row; y < args->end_row; y++) {
+        for (int x = 0; x < input->width; x++) {
+            for (int c = 0; c < input->channels; c++) {
+                int index = (y * input->width + x) * input->channels + c;
+                output->data[index] = apply_kernel(input, x, y, c, kernel, kernel_size);
+            }
+        }
+    }
+    return NULL;
+}
