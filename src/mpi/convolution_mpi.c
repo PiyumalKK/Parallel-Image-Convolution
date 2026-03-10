@@ -1,75 +1,118 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include <string.h>
 #include <mpi.h>
 #include "../../include/image_utils.h"
 
-unsigned char apply_kernel(Image *img, int x, int y, int c, float *kernel, int ksize) {
+float* generate_gaussian_kernel(int size, float sigma) {
 
-    int half = ksize / 2;
+    float *kernel = malloc(size * size * sizeof(float));
+    int half = size / 2;
     float sum = 0;
 
-    for (int ky = -half; ky <= half; ky++) {
-        for (int kx = -half; kx <= half; kx++) {
+    for (int y = -half; y <= half; y++) {
+        for (int x = -half; x <= half; x++) {
 
-            int img_x = x + kx;
-            int img_y = y + ky;
+            float value = expf(-(x*x + y*y) / (2*sigma*sigma));
 
-            if (img_x < 0) img_x = 0;
-            if (img_x >= img->width) img_x = img->width - 1;
-            if (img_y < 0) img_y = 0;
-            if (img_y >= img->height) img_y = img->height - 1;
-
-            int img_index = (img_y * img->width + img_x) * img->channels + c;
-            int kernel_index = (ky + half) * ksize + (kx + half);
-
-            sum += img->data[img_index] * kernel[kernel_index];
+            kernel[(y+half)*size + (x+half)] = value;
+            sum += value;
         }
     }
 
-    if (sum < 0) sum = 0;
-    if (sum > 255) sum = 255;
+    for (int i = 0; i < size*size; i++)
+        kernel[i] /= sum;
+
+    return kernel;
+}
+
+float edge_detection[9] = {
+    -1,-1,-1,
+    -1, 8,-1,
+    -1,-1,-1
+};
+
+float sharpen[9] = {
+     0,-1,0,
+    -1,5,-1,
+     0,-1,0
+};
+
+unsigned char apply_kernel(Image *img, int x, int y, int c, float *kernel, int ksize) {
+
+    int half = ksize/2;
+    float sum = 0;
+
+    for(int ky=-half; ky<=half; ky++){
+        for(int kx=-half; kx<=half; kx++){
+
+            int ix=x+kx;
+            int iy=y+ky;
+
+            if(ix<0) ix=0;
+            if(iy<0) iy=0;
+            if(ix>=img->width) ix=img->width-1;
+            if(iy>=img->height) iy=img->height-1;
+
+            int img_index=(iy*img->width+ix)*img->channels+c;
+            int kernel_index=(ky+half)*ksize+(kx+half);
+
+            sum+=img->data[img_index]*kernel[kernel_index];
+        }
+    }
+
+    if(sum<0) sum=0;
+    if(sum>255) sum=255;
 
     return (unsigned char)sum;
 }
 
+int main(int argc,char *argv[]) {
 
-int main(int argc, char *argv[]) {
+    MPI_Init(&argc,&argv);
 
-    MPI_Init(&argc, &argv);
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD,&rank);
 
-    int rank, size;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    if(rank==0){
 
-    if (argc < 4) {
-        if (rank == 0)
-            printf("Usage: %s <input_image> <output_image> <filter_type>\n", argv[0]);
+        Image *input=load_image(argv[1]);
+        Image *output=create_image(input->width,input->height,input->channels);
 
-        MPI_Finalize();
-        return 1;
-    }
+        float *kernel;
+        int kernel_size;
 
-    Image *input = NULL;
-    Image *output = NULL;
-
-    int width, height, channels;
-
-    if (rank == 0) {
-
-        input = load_image(argv[1]);
-        if (!input) {
-            printf("Error loading image\n");
-            MPI_Abort(MPI_COMM_WORLD, 1);
+        if(strcmp(argv[3],"blur")==0){
+            kernel_size=21;
+            kernel=generate_gaussian_kernel(kernel_size,7.0);
+        }
+        else if(strcmp(argv[3],"edge")==0){
+            kernel=edge_detection;
+            kernel_size=3;
+        }
+        else{
+            kernel=sharpen;
+            kernel_size=3;
         }
 
-        width = input->width;
-        height = input->height;
-        channels = input->channels;
+        for(int y=0;y<input->height;y++){
+            for(int x=0;x<input->width;x++){
+                for(int c=0;c<input->channels;c++){
 
-        printf("Running MPI with %d processes\n", size);
+                    int index=(y*input->width+x)*input->channels+c;
+
+                    output->data[index]=
+                        apply_kernel(input,x,y,c,kernel,kernel_size);
+                }
+            }
+        }
+
+        save_image(argv[2],output);
+
+        free_image(input);
+        free_image(output);
     }
 
     MPI_Finalize();
-    return 0;
 }
