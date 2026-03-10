@@ -29,3 +29,27 @@ float* generate_gaussian_kernel(int size, float sigma) {
     for (int i = 0; i < size * size; i++) kernel[i] /= sum;
     return kernel;
 }
+
+// ─── Per-pixel kernel application (same as serial) ───────────────────────────
+
+unsigned char apply_kernel(Image *img, int x, int y, int channel,
+                            float *kernel, int kernel_size) {
+    float sum = 0.0f;
+    int half = kernel_size / 2;
+    for (int ky = -half; ky <= half; ky++) {
+        for (int kx = -half; kx <= half; kx++) {
+            int img_x = x + kx;
+            int img_y = y + ky;
+            if (img_x < 0)            img_x = 0;
+            if (img_x >= img->width)  img_x = img->width  - 1;
+            if (img_y < 0)            img_y = 0;
+            if (img_y >= img->height) img_y = img->height - 1;
+            int img_index    = (img_y * img->width + img_x) * img->channels + channel;
+            int kernel_index = (ky + half) * kernel_size + (kx + half);
+            sum += img->data[img_index] * kernel[kernel_index];
+        }
+    }
+    if (sum <   0) sum =   0;
+    if (sum > 255) sum = 255;
+    return (unsigned char)sum;
+}
