@@ -123,3 +123,52 @@ Image* convolve_posix(Image *input, float *kernel, int kernel_size, int num_thre
     free(args);
     return output;
 }
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+
+int main(int argc, char *argv[]) {
+    if (argc < 5) {
+        printf("Usage: %s <input_image> <output_image> <filter_type> <num_threads>\n", argv[0]);
+        printf("filter_type: blur, edge, sharpen\n");
+        return 1;
+    }
+
+    Image *input = load_image(argv[1]);
+    if (!input) return 1;
+
+    int num_threads = atoi(argv[4]);
+    if (num_threads < 1) num_threads = 1;
+
+    float *kernel;
+    int    kernel_size;
+    int    is_blur = 0;
+
+    if (strcmp(argv[3], "blur") == 0) {
+        kernel_size = 21;
+        float sigma = 7.0f;
+        kernel      = generate_gaussian_kernel(kernel_size, sigma);
+        is_blur     = 1;
+    } else if (strcmp(argv[3], "edge") == 0) {
+        kernel      = edge_detection_3x3;
+        kernel_size = 3;
+    } else {
+        kernel      = sharpen_3x3;
+        kernel_size = 3;
+    }
+
+    clock_t start = clock();
+    Image *output = convolve_posix(input, kernel, kernel_size, num_threads);
+    clock_t end   = clock();
+
+    double time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
+    printf("POSIX convolution (%d threads) took: %.4f seconds\n", num_threads, time_taken);
+
+    save_image(argv[2], output);
+
+    free_image(input);
+    free_image(output);
+    if (is_blur) free(kernel);
+
+    return 0;
+}
+
