@@ -84,3 +84,42 @@ void* convolve_worker(void *arg) {
     }
     return NULL;
 }
+
+// ─── POSIX parallel convolution ──────────────────────────────────────────────
+
+Image* convolve_posix(Image *input, float *kernel, int kernel_size, int num_threads) {
+    Image *output = (Image*)malloc(sizeof(Image));
+    output->width    = input->width;
+    output->height   = input->height;
+    output->channels = input->channels;
+    output->data     = (unsigned char*)malloc(
+        input->width * input->height * input->channels
+    );
+
+    pthread_t   *threads = (pthread_t*)malloc(num_threads * sizeof(pthread_t));
+    ThreadArgs  *args    = (ThreadArgs*)malloc(num_threads * sizeof(ThreadArgs));
+
+    int rows_per_thread = input->height / num_threads;
+    int remaining_rows  = input->height % num_threads;
+
+    int current_row = 0;
+    for (int t = 0; t < num_threads; t++) {
+        args[t].input       = input;
+        args[t].output      = output;
+        args[t].kernel      = kernel;
+        args[t].kernel_size = kernel_size;
+        args[t].start_row   = current_row;
+        args[t].end_row     = current_row + rows_per_thread + (t < remaining_rows ? 1 : 0);
+        current_row         = args[t].end_row;
+
+        pthread_create(&threads[t], NULL, convolve_worker, &args[t]);
+    }
+
+    for (int t = 0; t < num_threads; t++) {
+        pthread_join(threads[t], NULL);
+    }
+
+    free(threads);
+    free(args);
+    return output;
+}
