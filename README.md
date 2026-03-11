@@ -216,24 +216,24 @@ nvcc -allow-unsupported-compiler -o convolution_cuda src/cuda/convolution_cuda.c
 **Test Environment:**
 - **CPU:** 4 cores (WSL2 on Azure VM)
 - **GPU:** NVIDIA Tesla T4 (2,560 CUDA cores, 16 GB VRAM)
-- **OpenMP Threads:** 4
-- **MPI Processes:** 4
+- **OpenMP Threads:** 4 and 8 (oversubscribed)
+- **MPI Processes:** 4 and 8 (oversubscribed)
 
 ### Execution Time (seconds)
 
-| Filter   | Kernel Size | Serial   | OpenMP (4T) | MPI (4P) | CUDA (T4) |
-|----------|-------------|----------|-------------|----------|------------|
-| Blur     | 21×21       | 75.2188  | 19.0556     | 19.0895  | 0.1115     |
-| Edge     | 3×3         | 1.9531   | 0.8603      | 0.5196   | 0.0134     |
-| Sharpen  | 3×3         | 0.2500   | 0.1412      | 0.0932   | 0.0044     |
+| Filter   | Kernel Size | Serial   | OpenMP (4T) | OpenMP (8T) | MPI (4P) | MPI (8P) | CUDA (T4) |
+|----------|-------------|----------|-------------|-------------|----------|----------|------------|
+| Blur     | 21×21       | 75.2188  | 19.0556     | 22.8717     | 19.0895  | 18.9988  | 0.1115     |
+| Edge     | 3×3         | 1.9531   | 0.8603      | 0.9165      | 0.5196   | 0.5093   | 0.0134     |
+| Sharpen  | 3×3         | 0.2500   | 0.1412      | 0.9113      | 0.0932   | 0.4664   | 0.0044     |
 
 ### Speedup vs Serial (×)
 
-| Filter   | OpenMP | MPI   | CUDA     |
-|----------|--------|-------|----------|
-| Blur     | 3.95×  | 3.94× | 674.6×   |
-| Edge     | 2.27×  | 3.76× | 145.8×   |
-| Sharpen  | 1.77×  | 2.68× | 56.8×    |
+| Filter   | OpenMP (4T) | OpenMP (8T) | MPI (4P) | MPI (8P) | CUDA     |
+|----------|-------------|-------------|----------|----------|----------|
+| Blur     | 3.95×       | 3.29×       | 3.94×    | 3.96×    | 674.6×   |
+| Edge     | 2.27×       | 2.13×       | 3.76×    | 3.83×    | 145.8×   |
+| Sharpen  | 1.77×       | 0.27×       | 2.68×    | 0.54×    | 56.8×    |
 
 ### Key Observations
 
@@ -245,4 +245,8 @@ nvcc -allow-unsupported-compiler -o convolution_cuda src/cuda/convolution_cuda.c
 
 4. **GPU overhead is visible on small workloads** — CUDA's speedup drops from 675× (blur) to 57× (sharpen) because the data transfer between CPU and GPU becomes a larger fraction of total time when the computation per pixel is small.
 
-5. **MPI edges out OpenMP on small kernels** — For edge detection and sharpen, MPI slightly outperforms OpenMP, likely due to differences in scheduling and memory access patterns.
+5. **MPI edges out OpenMP on small kernels** — For edge detection and sharpen, MPI (4P) slightly outperforms OpenMP, likely due to differences in scheduling and memory access patterns.
+
+6. **Oversubscription hurts small workloads** — MPI with 8 processes on 4 cores shows minimal improvement for blur/edge, and actually **slows down sharpen** (0.47s vs 0.09s) because the context-switching overhead between oversubscribed processes exceeds the computation time per pixel.
+
+7. **Oversubscription hurts OpenMP too** — OpenMP with 8 threads on 4 cores is slower than 4 threads across all filters: blur (22.87s vs 19.06s), edge (0.92s vs 0.86s), and sharpen (0.91s vs 0.14s). The sharpen case is worst — thread management overhead dwarfs the tiny 3×3 computation, making it **3.7× slower than serial**.
