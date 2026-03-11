@@ -246,3 +246,30 @@ nvcc -allow-unsupported-compiler -o convolution_cuda src/cuda/convolution_cuda.c
 4. **GPU overhead is visible on small workloads** — CUDA's speedup drops from 675× (blur) to 57× (sharpen) because the data transfer between CPU and GPU becomes a larger fraction of total time when the computation per pixel is small.
 
 5. **MPI edges out OpenMP on small kernels** — For edge detection and sharpen, MPI slightly outperforms OpenMP, likely due to differences in scheduling and memory access patterns.
+
+
+
+### 4. POSIX Threads (Shared-memory CPU)
+
+**Compile:**
+```bash
+gcc -o convolution_pthreads src/posix/convolution_posix.c src/image_utils.c -I include -lpthread -lm
+```
+
+**Run:**
+```bash
+./convolution_pthreads images/input/test.jpg images/output/result_posix.jpg blur 4
+```
+
+You can control the number of process using the -np option:
+
+```bash
+# Linux/macOS
+# Run with 4 processes
+./convolution_pthreads images/input/test.jpg images/output/result_posix.jpg blur 4
+
+# Run with 8 processes
+./convolution_pthreads images/input/test.jpg images/output/result_posix.jpg blur 8
+```
+
+---
