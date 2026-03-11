@@ -5,6 +5,7 @@ convolution_pthreads
 convolution_mpi
 convolution_cuda
 convolution_hybrid
+convolution_posix
 *.o
 *.out
 *.exe

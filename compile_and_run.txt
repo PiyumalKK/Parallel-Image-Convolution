@@ -1,0 +1,54 @@
+
+# --- 1. Serial ---
+echo "=== 1. Serial ==="
+gcc -o convolution_serial src/serial/convolution_serial.c src/image_utils.c -I include -lm
+./convolution_serial images/input/test.jpg images/output/blur_serial.jpg blur
+./convolution_serial images/input/test_edge.jpg images/output/edge_serial.jpg edge
+./convolution_serial images/input/test_sharp.jpg images/output/sharp_serial.jpg sharpen
+
+# --- 2. OpenMP (4 threads) ---
+echo "=== 2. OpenMP (4T) ==="
+gcc -fopenmp -o convolution_openmp src/openmp/convolution_openmp.c src/image_utils.c -I include -lm
+export OMP_NUM_THREADS=4
+./convolution_openmp images/input/test.jpg images/output/blur_openmp.jpg blur
+./convolution_openmp images/input/test_edge.jpg images/output/edge_openmp.jpg edge
+./convolution_openmp images/input/test_sharp.jpg images/output/sharp_openmp.jpg sharpen
+
+# --- 2. OpenMP (8 threads) ---
+echo "=== 2. OpenMP (8T) ==="
+export OMP_NUM_THREADS=8
+./convolution_openmp images/input/test.jpg images/output/blur_openmp_8T.jpg blur
+./convolution_openmp images/input/test_edge.jpg images/output/edge_openmp_8T.jpg edge
+./convolution_openmp images/input/test_sharp.jpg images/output/sharp_openmp_8T.jpg sharpen
+
+# --- 3. MPI (4 processes) ---
+echo "=== 3. MPI (4P) ==="
+mpicc -o convolution_mpi src/mpi/convolution_mpi.c src/image_utils.c -I include -lm
+mpirun -np 4 ./convolution_mpi images/input/test.jpg images/output/blur_mpi.jpg blur
+mpirun -np 4 ./convolution_mpi images/input/test_edge.jpg images/output/edge_mpi.jpg edge
+mpirun -np 4 ./convolution_mpi images/input/test_sharp.jpg images/output/sharp_mpi.jpg sharpen
+
+# --- 3. MPI (8 processes) ---
+echo "=== 3. MPI (8P) ==="
+mpirun --oversubscribe -np 8 ./convolution_mpi images/input/test.jpg images/output/blur_mpi_8P.jpg blur
+mpirun --oversubscribe -np 8 ./convolution_mpi images/input/test_edge.jpg images/output/edge_mpi_8P.jpg edge
+mpirun --oversubscribe -np 8 ./convolution_mpi images/input/test_sharp.jpg images/output/sharp_mpi_8P.jpg sharpen
+
+# --- 4. POSIX (4 threads) ---
+echo "=== 4. POSIX (4T) ==="
+gcc -o convolution_posix src/posix/convolution_posix.c src/image_utils.c -I include -lm -lpthread
+./convolution_posix images/input/test.jpg images/output/blur_posix.jpg blur 4
+./convolution_posix images/input/test_edge.jpg images/output/edge_posix.jpg edge 4
+./convolution_posix images/input/test_sharp.jpg images/output/sharp_posix.jpg sharpen 4
+
+# --- 4. POSIX (8 threads) ---
+echo "=== 4. POSIX (8T) ==="
+./convolution_posix images/input/test.jpg images/output/blur_posix_8T.jpg blur 8
+./convolution_posix images/input/test_edge.jpg images/output/edge_posix_8T.jpg edge 8
+./convolution_posix images/input/test_sharp.jpg images/output/sharp_posix_8T.jpg sharpen 8
+
+# --- 5. CUDA (run in Windows PowerShell) ---
+nvcc -allow-unsupported-compiler -o convolution_cuda src/cuda/convolution_cuda.cu src/image_utils.c -I include
+./convolution_cuda images/input/test.jpg images/output/blur_cuda.jpg blur
+./convolution_cuda images/input/test_edge.jpg images/output/edge_cuda.jpg edge
+./convolution_cuda images/input/test_sharp.jpg images/output/sharp_cuda.jpg sharpen

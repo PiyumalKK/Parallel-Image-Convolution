@@ -1,6 +1,6 @@
 # Parallel Image Convolution
 
-Image convolution implemented using three parallelization approaches — **Serial**, **OpenMP**, and **CUDA** — to compare performance across CPU and GPU. Each version applies a convolution kernel (filter) to an input image pixel-by-pixel and writes the result to an output image.
+Image convolution implemented using multiple parallelization approaches — **Serial**, **POSIX Threads**, **OpenMP**, **MPI**, and **CUDA** — to compare performance across CPU and GPU. Each version applies a convolution kernel (filter) to an input image pixel-by-pixel and writes the result to an output image.
 
 ## Project Structure
 
@@ -12,6 +12,9 @@ project/
 │   |
 │   ├── serial/
 │   │   └── convolution_serial.c   # Single-threaded CPU implementation
+│   |
+│   ├── posix/
+│   │   └── convolution_posix.c    # Multi-threaded CPU with POSIX threads
 │   |
 │   ├── openmp/
 │   │   └── convolution_openmp.c   # Multi-threaded CPU with OpenMP
@@ -46,7 +49,7 @@ project/
 
 ## Prerequisites
 
-- **GCC** (for Serial and OpenMP builds)
+- **GCC** (for Serial, POSIX, and OpenMP builds)
 - **NVIDIA CUDA Toolkit** (for CUDA build)
 - **MSVC (`cl.exe`)** — required by `nvcc` on Windows. Comes with Visual Studio (Build Tools or Community edition).
 
@@ -143,7 +146,38 @@ mpirun -np 8 ./convolution_mpi images/input/test.jpg images/output/blur_mpi.jpg 
 
 ---
 
-### 3. CUDA (GPU)
+### 3. POSIX Threads (Multi-threaded CPU)
+
+No extra installation needed — pthreads is built into GCC on Linux/WSL.
+
+**Compile:**
+```bash
+gcc -o convolution_posix src/posix/convolution_posix.c src/image_utils.c -I include -lm -lpthread
+```
+
+**Run (thread count is the 4th argument):**
+```bash
+# Blur
+./convolution_posix images/input/test.jpg images/output/blur_posix.jpg blur 4
+
+# Edge Detection
+./convolution_posix images/input/test_edge.jpg images/output/edge_posix.jpg edge 4
+
+# Sharpen
+./convolution_posix images/input/test_sharp.jpg images/output/sharp_posix.jpg sharpen 4
+```
+
+You can change the thread count by changing the last argument:
+```bash
+# Run with 8 threads
+./convolution_posix images/input/test.jpg images/output/blur_posix_8T.jpg blur 8
+```
+
+> **Note:** POSIX version uses `clock()` which measures total **CPU time** across all threads, not wall-clock time. So reported times appear similar to serial even though the actual elapsed time is faster.
+
+---
+
+### 4. CUDA (GPU)
 
 #### Windows Setup
 
@@ -218,14 +252,16 @@ nvcc -allow-unsupported-compiler -o convolution_cuda src/cuda/convolution_cuda.c
 - **GPU:** NVIDIA Tesla T4 (2,560 CUDA cores, 16 GB VRAM)
 - **OpenMP Threads:** 4 and 8 (oversubscribed)
 - **MPI Processes:** 4 and 8 (oversubscribed)
+- **POSIX Threads:** 4 and 8
 
 ### Execution Time (seconds)
 
-| Filter   | Kernel Size | Serial   | OpenMP (4T) | OpenMP (8T) | MPI (4P) | MPI (8P) | CUDA (T4) |
-|----------|-------------|----------|-------------|-------------|----------|----------|------------|
-| Blur     | 21×21       | 75.2188  | 19.0556     | 22.8717     | 19.0895  | 18.9988  | 0.1115     |
-| Edge     | 3×3         | 1.9531   | 0.8603      | 0.9165      | 0.5196   | 0.5093   | 0.0134     |
-| Sharpen  | 3×3         | 0.2500   | 0.1412      | 0.9113      | 0.0932   | 0.4664   | 0.0044     |
+| Filter   | Kernel Size | Serial   | POSIX (4T) | POSIX (8T) | OpenMP (4T) | OpenMP (8T) | MPI (4P) | MPI (8P) | CUDA (T4) |
+|----------|-------------|----------|------------|------------|-------------|-------------|----------|----------|------------|
+| Blur     | 21×21       | 75.2188  | 76.3906*   | 75.7812*   | 19.0556     | 22.8717     | 19.0895  | 18.9988  | 0.1115     |
+| Edge     | 3×3         | 1.9531   | 2.2188*    | 2.1094*    | 0.8603      | 0.9165      | 0.5196   | 0.5093   | 0.0134     |
+| Sharpen  | 3×3         | 0.2500   | 0.3125*    | 0.2656*    | 0.1412      | 0.9113      | 0.0932   | 0.4664   | 0.0044     |
+
 
 ### Speedup vs Serial (×)
 
@@ -246,3 +282,5 @@ nvcc -allow-unsupported-compiler -o convolution_cuda src/cuda/convolution_cuda.c
 4. **GPU overhead is visible on small workloads** — CUDA's speedup drops from 675× (blur) to 57× (sharpen) because the data transfer between CPU and GPU becomes a larger fraction of total time when the computation per pixel is small.
 
 5. **MPI edges out OpenMP on small kernels** — For edge detection and sharpen, MPI slightly outperforms OpenMP, likely due to differences in scheduling and memory access patterns.
+
+6. **POSIX threads show similar CPU time to serial** — The POSIX version uses `clock()` which sums CPU time across all threads. The reported ~76s for blur with 4 threads doesn't mean it took 76s on the wall clock — each thread used ~19s of CPU time, totaling ~76s. The actual wall-clock time would be ~19s, comparable to OpenMP.
