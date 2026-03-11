@@ -245,8 +245,4 @@ nvcc -allow-unsupported-compiler -o convolution_cuda src/cuda/convolution_cuda.c
 
 4. **GPU overhead is visible on small workloads** — CUDA's speedup drops from 675× (blur) to 57× (sharpen) because the data transfer between CPU and GPU becomes a larger fraction of total time when the computation per pixel is small.
 
-5. **MPI edges out OpenMP on small kernels** — For edge detection and sharpen, MPI (4P) slightly outperforms OpenMP, likely due to differences in scheduling and memory access patterns.
-
-6. **Oversubscription hurts small workloads** — MPI with 8 processes on 4 cores shows minimal improvement for blur/edge, and actually **slows down sharpen** (0.47s vs 0.09s) because the context-switching overhead between oversubscribed processes exceeds the computation time per pixel.
-
-7. **Oversubscription hurts OpenMP too** — OpenMP with 8 threads on 4 cores is slower than 4 threads across all filters: blur (22.87s vs 19.06s), edge (0.92s vs 0.86s), and sharpen (0.91s vs 0.14s). The sharpen case is worst — thread management overhead dwarfs the tiny 3×3 computation, making it **3.7× slower than serial**.
+5. **MPI edges out OpenMP on small kernels** — For edge detection and sharpen, MPI slightly outperforms OpenMP, likely due to differences in scheduling and memory access patterns.
