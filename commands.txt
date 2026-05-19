@@ -1,0 +1,127 @@
+========================================
+ PARALLEL IMAGE CONVOLUTION - COMMANDS
+========================================
+
+========================================
+1. SERIAL
+========================================
+
+Compile:
+gcc -o convolution_serial src/serial/convolution_serial.c src/image_utils.c -I include -lm
+
+Run:
+./convolution_serial images/input/test.jpg images/output/blur_serial.jpg blur
+./convolution_serial images/input/test_edge.jpg images/output/edge_serial.jpg edge
+./convolution_serial images/input/test_sharp.jpg images/output/sharp_serial.jpg sharpen
+
+========================================
+2. OPENMP
+========================================
+
+Compile:
+gcc -fopenmp -o convolution_openmp src/openmp/convolution_openmp.c src/image_utils.c -I include -lm
+
+Set threads (Windows PowerShell):
+$env:OMP_NUM_THREADS = 1
+$env:OMP_NUM_THREADS = 2
+$env:OMP_NUM_THREADS = 4
+$env:OMP_NUM_THREADS = 8
+
+Set threads (Linux/macOS):
+export OMP_NUM_THREADS=1
+export OMP_NUM_THREADS=2
+export OMP_NUM_THREADS=4
+export OMP_NUM_THREADS=8
+
+Run:
+./convolution_openmp images/input/test.jpg images/output/blur_openmp.jpg blur
+./convolution_openmp images/input/test_edge.jpg images/output/edge_openmp.jpg edge
+./convolution_openmp images/input/test_sharp.jpg images/output/sharp_openmp.jpg sharpen
+
+Run all (1, 2, 4, 8 threads - Windows PowerShell):
+$env:OMP_NUM_THREADS = 1; ./convolution_openmp images/input/test.jpg images/output/blur_openmp.jpg blur
+$env:OMP_NUM_THREADS = 1; ./convolution_openmp images/input/test_edge.jpg images/output/edge_openmp.jpg edge
+$env:OMP_NUM_THREADS = 1; ./convolution_openmp images/input/test_sharp.jpg images/output/sharp_openmp.jpg sharpen
+$env:OMP_NUM_THREADS = 2; ./convolution_openmp images/input/test.jpg images/output/blur_openmp.jpg blur
+$env:OMP_NUM_THREADS = 2; ./convolution_openmp images/input/test_edge.jpg images/output/edge_openmp.jpg edge
+$env:OMP_NUM_THREADS = 2; ./convolution_openmp images/input/test_sharp.jpg images/output/sharp_openmp.jpg sharpen
+$env:OMP_NUM_THREADS = 4; ./convolution_openmp images/input/test.jpg images/output/blur_openmp.jpg blur
+$env:OMP_NUM_THREADS = 4; ./convolution_openmp images/input/test_edge.jpg images/output/edge_openmp.jpg edge
+$env:OMP_NUM_THREADS = 4; ./convolution_openmp images/input/test_sharp.jpg images/output/sharp_openmp.jpg sharpen
+$env:OMP_NUM_THREADS = 8; ./convolution_openmp images/input/test.jpg images/output/blur_openmp.jpg blur
+$env:OMP_NUM_THREADS = 8; ./convolution_openmp images/input/test_edge.jpg images/output/edge_openmp.jpg edge
+$env:OMP_NUM_THREADS = 8; ./convolution_openmp images/input/test_sharp.jpg images/output/sharp_openmp.jpg sharpen
+
+========================================
+3. POSIX THREADS
+========================================
+
+Compile:
+gcc -o convolution_pthreads src/posix/convolution_posix.c src/image_utils.c -I include -lpthread -lm
+
+Run (4th argument = number of threads):
+./convolution_pthreads images/input/test.jpg images/output/blur_posix.jpg blur 1
+./convolution_pthreads images/input/test_edge.jpg images/output/edge_posix.jpg edge 1
+./convolution_pthreads images/input/test_sharp.jpg images/output/sharp_posix.jpg sharpen 1
+./convolution_pthreads images/input/test.jpg images/output/blur_posix.jpg blur 2
+./convolution_pthreads images/input/test_edge.jpg images/output/edge_posix.jpg edge 2
+./convolution_pthreads images/input/test_sharp.jpg images/output/sharp_posix.jpg sharpen 2
+./convolution_pthreads images/input/test.jpg images/output/blur_posix.jpg blur 4
+./convolution_pthreads images/input/test_edge.jpg images/output/edge_posix.jpg edge 4
+./convolution_pthreads images/input/test_sharp.jpg images/output/sharp_posix.jpg sharpen 4
+./convolution_pthreads images/input/test.jpg images/output/blur_posix.jpg blur 8
+./convolution_pthreads images/input/test_edge.jpg images/output/edge_posix.jpg edge 8
+./convolution_pthreads images/input/test_sharp.jpg images/output/sharp_posix.jpg sharpen 8
+
+========================================
+4. MPI
+========================================
+
+Compile:
+mpicc -o convolution_mpi src/mpi/convolution_mpi.c src/image_utils.c -I include -lm
+
+Run (Windows - mpiexec):
+mpiexec -n 1 ./convolution_mpi images/input/test.jpg images/output/blur_mpi.jpg blur
+mpiexec -n 1 ./convolution_mpi images/input/test_edge.jpg images/output/edge_mpi.jpg edge
+mpiexec -n 1 ./convolution_mpi images/input/test_sharp.jpg images/output/sharp_mpi.jpg sharpen
+mpiexec -n 2 ./convolution_mpi images/input/test.jpg images/output/blur_mpi.jpg blur
+mpiexec -n 2 ./convolution_mpi images/input/test_edge.jpg images/output/edge_mpi.jpg edge
+mpiexec -n 2 ./convolution_mpi images/input/test_sharp.jpg images/output/sharp_mpi.jpg sharpen
+mpiexec -n 4 ./convolution_mpi images/input/test.jpg images/output/blur_mpi.jpg blur
+mpiexec -n 4 ./convolution_mpi images/input/test_edge.jpg images/output/edge_mpi.jpg edge
+mpiexec -n 4 ./convolution_mpi images/input/test_sharp.jpg images/output/sharp_mpi.jpg sharpen
+mpiexec -n 8 ./convolution_mpi images/input/test.jpg images/output/blur_mpi.jpg blur
+mpiexec -n 8 ./convolution_mpi images/input/test_edge.jpg images/output/edge_mpi.jpg edge
+mpiexec -n 8 ./convolution_mpi images/input/test_sharp.jpg images/output/sharp_mpi.jpg sharpen
+
+Run (Linux - mpirun):
+mpirun -np 1 ./convolution_mpi images/input/test.jpg images/output/blur_mpi.jpg blur
+mpirun -np 1 ./convolution_mpi images/input/test_edge.jpg images/output/edge_mpi.jpg edge
+mpirun -np 1 ./convolution_mpi images/input/test_sharp.jpg images/output/sharp_mpi.jpg sharpen
+mpirun -np 2 ./convolution_mpi images/input/test.jpg images/output/blur_mpi.jpg blur
+mpirun -np 2 ./convolution_mpi images/input/test_edge.jpg images/output/edge_mpi.jpg edge
+mpirun -np 2 ./convolution_mpi images/input/test_sharp.jpg images/output/sharp_mpi.jpg sharpen
+mpirun -np 4 ./convolution_mpi images/input/test.jpg images/output/blur_mpi.jpg blur
+mpirun -np 4 ./convolution_mpi images/input/test_edge.jpg images/output/edge_mpi.jpg edge
+mpirun -np 4 ./convolution_mpi images/input/test_sharp.jpg images/output/sharp_mpi.jpg sharpen
+mpirun -np 8 ./convolution_mpi images/input/test.jpg images/output/blur_mpi.jpg blur
+mpirun -np 8 ./convolution_mpi images/input/test_edge.jpg images/output/edge_mpi.jpg edge
+mpirun -np 8 ./convolution_mpi images/input/test_sharp.jpg images/output/sharp_mpi.jpg sharpen
+
+========================================
+5. CUDA
+========================================
+
+Prerequisites (Windows - add MSVC cl.exe to PATH):
+$env:PATH = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64;" + $env:PATH
+
+Or permanently:
+[System.Environment]::SetEnvironmentVariable("PATH", "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64;" + [System.Environment]::GetEnvironmentVariable("PATH", "User"), "User")
+
+Compile:
+nvcc -allow-unsupported-compiler -o convolution_cuda src/cuda/convolution_cuda.cu src/image_utils.c -I include
+
+Run:
+./convolution_cuda images/input/test.jpg images/output/blur_cuda.jpg blur
+./convolution_cuda images/input/test_edge.jpg images/output/edge_cuda.jpg edge
+./convolution_cuda images/input/test_sharp.jpg images/output/sharp_cuda.jpg sharpen

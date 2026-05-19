@@ -99,6 +99,11 @@ Image* convolve_posix(Image *input, float *kernel, int kernel_size, int num_thre
     pthread_t   *threads = (pthread_t*)malloc(num_threads * sizeof(pthread_t));
     ThreadArgs  *args    = (ThreadArgs*)malloc(num_threads * sizeof(ThreadArgs));
 
+    // Initialize thread attribute and explicitly set joinable (LLNL tutorial best practice)
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
     int rows_per_thread = input->height / num_threads;
     int remaining_rows  = input->height % num_threads;
 
@@ -112,11 +117,21 @@ Image* convolve_posix(Image *input, float *kernel, int kernel_size, int num_thre
         args[t].end_row     = current_row + rows_per_thread + (t < remaining_rows ? 1 : 0);
         current_row         = args[t].end_row;
 
-        pthread_create(&threads[t], NULL, convolve_worker, &args[t]);
+        int rc = pthread_create(&threads[t], &attr, convolve_worker, &args[t]);
+        if (rc) {
+            printf("ERROR: return code from pthread_create() is %d\n", rc);
+            exit(-1);
+        }
     }
 
+    // Free attribute and wait for threads to complete
+    pthread_attr_destroy(&attr);
     for (int t = 0; t < num_threads; t++) {
-        pthread_join(threads[t], NULL);
+        int rc = pthread_join(threads[t], NULL);
+        if (rc) {
+            printf("ERROR: return code from pthread_join() is %d\n", rc);
+            exit(-1);
+        }
     }
 
     free(threads);
@@ -156,11 +171,13 @@ int main(int argc, char *argv[]) {
         kernel_size = 3;
     }
 
-    clock_t start = clock();
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
     Image *output = convolve_posix(input, kernel, kernel_size, num_threads);
-    clock_t end   = clock();
+    clock_gettime(CLOCK_MONOTONIC, &end_time);
 
-    double time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
+    double time_taken = (end_time.tv_sec - start_time.tv_sec) +
+                        (end_time.tv_nsec - start_time.tv_nsec) / 1e9;
     printf("POSIX convolution (%d threads) took: %.4f seconds\n", num_threads, time_taken);
 
     save_image(argv[2], output);

@@ -8,7 +8,7 @@ extern "C" {
     #include "../include/image_utils.h"
 }
 
-// CUDA error checking macro
+// CUDA error checking macro (CUDA Programming Guide - Error Handling)
 #define CUDA_CHECK(call) do { \
     cudaError_t err = call; \
     if (err != cudaSuccess) { \
@@ -17,6 +17,19 @@ extern "C" {
         exit(EXIT_FAILURE); \
     } \
 } while (0)
+
+// Maximum kernel size supported (21x21 = 441 elements)
+#define MAX_KERNEL_SIZE 21
+#define MAX_KERNEL_ELEMS (MAX_KERNEL_SIZE * MAX_KERNEL_SIZE)
+
+// Constant memory for convolution kernel (CUDA Programming Guide - Constant Memory)
+// Constant memory is cached and broadcast to all threads in a warp,
+// making it ideal for read-only data accessed uniformly by all threads.
+__constant__ float d_const_kernel[MAX_KERNEL_ELEMS];
+
+// Thread block dimensions for shared memory tiling
+#define TILE_WIDTH 16
+#define TILE_HEIGHT 16
 
 // Generate a true normalized Gaussian kernel (size must be odd)
 float* generate_gaussian_kernel(int size, float sigma) {
@@ -41,37 +54,78 @@ float sharpen_3x3[9] = {
     0, -1, 0
 };
 
-// CUDA kernel: each thread processes one pixel's one channel
-__global__ void convolution_kernel(unsigned char *input, unsigned char *output,
-                                    int width, int height, int channels,
-                                    float *kernel, int kernel_size) {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-
-    if (x >= width || y >= height) return;
-
+// CUDA kernel with shared memory tiling (CUDA Programming Guide - Shared Memory)
+// Each thread block loads a tile of input pixels (including halo region) into
+// shared memory, reducing redundant global memory accesses for overlapping
+// convolution neighborhoods.
+__global__ void convolution_shared(unsigned char *input, unsigned char *output,
+                                   int width, int height, int channels,
+                                   int kernel_size) {
     int half = kernel_size / 2;
+
+    // Shared memory tile dimensions include halo pixels
+    int shared_width = TILE_WIDTH + 2 * half;
+    int shared_height = TILE_HEIGHT + 2 * half;
+
+    // Dynamically allocated shared memory for the input tile
+    extern __shared__ unsigned char s_tile[];
+
+    // Output pixel coordinates
+    int out_x = blockIdx.x * TILE_WIDTH + threadIdx.x;
+    int out_y = blockIdx.y * TILE_HEIGHT + threadIdx.y;
+
+    // Load tile into shared memory (cooperative loading)
+    // Each thread may need to load multiple elements to fill the halo
+    for (int c = 0; c < channels; c++) {
+        // Number of elements to load per channel
+        int tile_elems = shared_width * shared_height;
+        int threads_per_block = TILE_WIDTH * TILE_HEIGHT;
+        int tid = threadIdx.y * TILE_WIDTH + threadIdx.x;
+
+        for (int idx = tid; idx < tile_elems; idx += threads_per_block) {
+            int ty = idx / shared_width;
+            int tx = idx % shared_width;
+
+            // Map tile coordinates to image coordinates
+            int img_x = blockIdx.x * TILE_WIDTH + tx - half;
+            int img_y = blockIdx.y * TILE_HEIGHT + ty - half;
+
+            // Clamp to image boundaries
+            img_x = max(0, min(img_x, width - 1));
+            img_y = max(0, min(img_y, height - 1));
+
+            s_tile[c * tile_elems + ty * shared_width + tx] =
+                input[(img_y * width + img_x) * channels + c];
+        }
+    }
+
+    // Synchronize to ensure all threads have loaded their data
+    __syncthreads();
+
+    // Compute convolution for this output pixel
+    if (out_x >= width || out_y >= height) return;
+
+    int tile_elems = shared_width * shared_height;
 
     for (int c = 0; c < channels; c++) {
         float sum = 0.0f;
-        for (int ky = -half; ky <= half; ky++) {
-            for (int kx = -half; kx <= half; kx++) {
-                int img_x = x + kx;
-                int img_y = y + ky;
-                // Clamp to edges
-                if (img_x < 0) img_x = 0;
-                if (img_x >= width) img_x = width - 1;
-                if (img_y < 0) img_y = 0;
-                if (img_y >= height) img_y = height - 1;
 
-                int img_index = (img_y * width + img_x) * channels + c;
-                int kernel_index = (ky + half) * kernel_size + (kx + half);
-                sum += input[img_index] * kernel[kernel_index];
+        for (int ky = 0; ky < kernel_size; ky++) {
+            for (int kx = 0; kx < kernel_size; kx++) {
+                int sx = threadIdx.x + kx;
+                int sy = threadIdx.y + ky;
+
+                // Read from shared memory (fast) instead of global memory
+                unsigned char pixel = s_tile[c * tile_elems + sy * shared_width + sx];
+                // Read kernel from constant memory (cached, broadcast)
+                float weight = d_const_kernel[ky * kernel_size + kx];
+                sum += pixel * weight;
             }
         }
-        if (sum < 0.0f) sum = 0.0f;
-        if (sum > 255.0f) sum = 255.0f;
-        int out_index = (y * width + x) * channels + c;
+
+        // Clamp output to [0, 255]
+        sum = fminf(fmaxf(sum, 0.0f), 255.0f);
+        int out_index = (out_y * width + out_x) * channels + c;
         output[out_index] = (unsigned char)sum;
     }
 }
@@ -82,7 +136,6 @@ Image* convolve_cuda(Image *input, float *kern, int kernel_size) {
     int height = input->height;
     int channels = input->channels;
     size_t img_size = width * height * channels * sizeof(unsigned char);
-    size_t kern_size = kernel_size * kernel_size * sizeof(float);
 
     // Allocate output on host
     Image *output = (Image*)malloc(sizeof(Image));
@@ -91,35 +144,44 @@ Image* convolve_cuda(Image *input, float *kern, int kernel_size) {
     output->channels = channels;
     output->data = (unsigned char*)malloc(img_size);
 
-    // Allocate device memory
+    // Copy convolution kernel to constant memory (CUDA Programming Guide)
+    // cudaMemcpyToSymbol copies data to __constant__ memory space on device
+    CUDA_CHECK(cudaMemcpyToSymbol(d_const_kernel, kern,
+               kernel_size * kernel_size * sizeof(float)));
+
+    // Allocate device memory for input and output images
     unsigned char *d_input, *d_output;
-    float *d_kernel;
     CUDA_CHECK(cudaMalloc(&d_input, img_size));
     CUDA_CHECK(cudaMalloc(&d_output, img_size));
-    CUDA_CHECK(cudaMalloc(&d_kernel, kern_size));
 
-    // Copy data to device
+    // Copy input image to device (Host-to-Device transfer)
     CUDA_CHECK(cudaMemcpy(d_input, input->data, img_size, cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_kernel, kern, kern_size, cudaMemcpyHostToDevice));
 
-    // Launch kernel with 16x16 thread blocks
-    dim3 blockDim(16, 16);
-    dim3 gridDim((width + blockDim.x - 1) / blockDim.x,
-                 (height + blockDim.y - 1) / blockDim.y);
+    // Configure grid and block dimensions (CUDA Programming Guide - Thread Hierarchy)
+    // Block: TILE_WIDTH x TILE_HEIGHT threads (256 threads per block)
+    // Grid: enough blocks to cover the entire image
+    dim3 block(TILE_WIDTH, TILE_HEIGHT);
+    dim3 grid((width + TILE_WIDTH - 1) / TILE_WIDTH,
+              (height + TILE_HEIGHT - 1) / TILE_HEIGHT);
 
-    convolution_kernel<<<gridDim, blockDim>>>(d_input, d_output,
-                                               width, height, channels,
-                                               d_kernel, kernel_size);
+    // Calculate shared memory size for the tiled kernel
+    int half = kernel_size / 2;
+    int shared_width = TILE_WIDTH + 2 * half;
+    int shared_height = TILE_HEIGHT + 2 * half;
+    size_t shared_mem_size = shared_width * shared_height * channels * sizeof(unsigned char);
+
+    // Launch kernel with shared memory tiling
+    convolution_shared<<<grid, block, shared_mem_size>>>(
+        d_input, d_output, width, height, channels, kernel_size);
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
 
-    // Copy result back to host
+    // Copy result back to host (Device-to-Host transfer)
     CUDA_CHECK(cudaMemcpy(output->data, d_output, img_size, cudaMemcpyDeviceToHost));
 
-    // Cleanup device memory
+    // Free device memory
     cudaFree(d_input);
     cudaFree(d_output);
-    cudaFree(d_kernel);
 
     return output;
 }
@@ -131,34 +193,64 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Print GPU info
+    // Query and print GPU device properties (CUDA Programming Guide - Device Management)
+    int device_count;
+    CUDA_CHECK(cudaGetDeviceCount(&device_count));
+    if (device_count == 0) {
+        fprintf(stderr, "Error: No CUDA-capable device found\n");
+        return 1;
+    }
+
     cudaDeviceProp prop;
     CUDA_CHECK(cudaGetDeviceProperties(&prop, 0));
     printf("Using GPU: %s\n", prop.name);
+    printf("  Compute capability: %d.%d\n", prop.major, prop.minor);
+    printf("  Multiprocessors: %d\n", prop.multiProcessorCount);
+    printf("  Max threads per block: %d\n", prop.maxThreadsPerBlock);
+    printf("  Shared memory per block: %zu bytes\n", prop.sharedMemPerBlock);
+    printf("  Constant memory: %zu bytes\n", prop.totalConstMem);
 
     // Load image
     Image *input = load_image(argv[1]);
     if (!input) return 1;
 
-    // Select kernel
+    printf("Image: %dx%d, %d channels\n", input->width, input->height, input->channels);
+
+    // Select convolution kernel based on filter type
     float *kern;
     int kernel_size;
     int is_blur = 0;
 
     if (strcmp(argv[3], "blur") == 0) {
-        kernel_size = 21;      // same as serial
-        float sigma = 7.0f;    // same as serial
+        kernel_size = 21;
+        float sigma = 7.0f;
         kern = generate_gaussian_kernel(kernel_size, sigma);
         is_blur = 1;
+        printf("Filter: Gaussian Blur (kernel=%dx%d, sigma=%.1f)\n", kernel_size, kernel_size, sigma);
     } else if (strcmp(argv[3], "edge") == 0) {
         kern = edge_detection_3x3;
         kernel_size = 3;
-    } else {
+        printf("Filter: Edge Detection (kernel=3x3)\n");
+    } else if (strcmp(argv[3], "sharpen") == 0) {
         kern = sharpen_3x3;
         kernel_size = 3;
+        printf("Filter: Sharpen (kernel=3x3)\n");
+    } else {
+        fprintf(stderr, "Error: Unknown filter '%s'. Use blur, edge, or sharpen.\n", argv[3]);
+        free_image(input);
+        return 1;
     }
 
-    // Create CUDA events for timing
+    // Verify kernel size fits in constant memory
+    if (kernel_size > MAX_KERNEL_SIZE) {
+        fprintf(stderr, "Error: Kernel size %d exceeds maximum %d\n", kernel_size, MAX_KERNEL_SIZE);
+        free_image(input);
+        if (is_blur) free(kern);
+        return 1;
+    }
+
+    // Create CUDA events for timing (CUDA Programming Guide - Events and Timing)
+    // CUDA events provide GPU-accurate timing without CPU synchronization overhead
     cudaEvent_t start, stop;
     CUDA_CHECK(cudaEventCreate(&start));
     CUDA_CHECK(cudaEventCreate(&stop));
@@ -173,13 +265,17 @@ int main(int argc, char *argv[]) {
     printf("CUDA convolution took: %.4f seconds\n", milliseconds / 1000.0f);
 
     save_image(argv[2], output);
+    printf("Output saved to: %s\n", argv[2]);
 
+    // Cleanup
     free_image(input);
     free_image(output);
     if (is_blur) free(kern);
-
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
+
+    // Reset device (CUDA Programming Guide - Device Management)
+    cudaDeviceReset();
 
     return 0;
 }

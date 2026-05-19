@@ -1,6 +1,12 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#ifdef _WIN32
+#include <direct.h>
+#define MKDIR(path) _mkdir(path)
+#else
+#define MKDIR(path) mkdir(path, 0755)
+#endif
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image.h"
@@ -13,7 +19,7 @@ static void ensure_parent_dirs(const char *filepath) {
     for (char *p = path + 1; *p; p++) {
         if (*p == '/' || *p == '\\') {
             *p = '\0';
-            mkdir(path, 0755);
+            MKDIR(path);
             *p = '/';
         }
     }
