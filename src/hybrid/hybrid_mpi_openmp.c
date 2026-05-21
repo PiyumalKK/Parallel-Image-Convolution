@@ -3,6 +3,7 @@
 #include <math.h>
 #include <string.h>
 #include <mpi.h>
+#include <omp.h>                          // ← added
 #include "../../include/image_utils.h"
 
 /* ── Kernels ── */
@@ -24,7 +25,7 @@ float* generate_gaussian_kernel(int size, float sigma) {
 float edge_detection_3x3[9] = { -1,-1,-1, -1,8,-1, -1,-1,-1 };
 float sharpen_3x3[9]        = {  0,-1, 0, -1,5,-1,  0,-1, 0 };
 
-/* ── Apply kernel to one pixel ── */
+/* ── Apply kernel to one pixel (thread-safe: read-only on all_data) ── */
 
 static inline unsigned char apply_kernel(
     const unsigned char *data,
@@ -49,7 +50,10 @@ static inline unsigned char apply_kernel(
 
 int main(int argc, char *argv[]) {
 
-    MPI_Init(&argc, &argv);
+    // MPI_THREAD_FUNNELED: only main thread calls MPI
+    // OpenMP threads run freely inside each rank      ← changed from MPI_Init
+    int provided;
+    MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
 
     int rank, nprocs;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -116,10 +120,11 @@ int main(int argc, char *argv[]) {
 
     unsigned char *local_out = malloc(my_pixels);
 
-    /* ── Step 5: MPI only - serial pixel loop per rank ── */
-    // TODO: OpenMP will be added in next commit
+    /* ── Step 5: OpenMP parallelises pixel loop inside each MPI rank ── */
+    //            Each rank spawns OMP_NUM_THREADS threads here
     double t_start = MPI_Wtime();
 
+    #pragma omp parallel for schedule(dynamic, 4) collapse(2)  // ← added
     for (int y = start_row; y < start_row + my_rows; y++) {
         for (int x = 0; x < width; x++) {
             for (int c = 0; c < channels; c++) {
@@ -160,8 +165,10 @@ int main(int argc, char *argv[]) {
     MPI_Reduce(&local_time, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
     if (rank == 0) {
-        printf("MPI-only convolution took : %.4f seconds\n", max_time);
-        printf("  MPI ranks               : %d\n", nprocs);
+        printf("Hybrid MPI+OpenMP convolution took : %.4f seconds\n", max_time);
+        printf("  MPI ranks                        : %d\n", nprocs);
+        printf("  OpenMP threads per rank          : %d\n", omp_get_max_threads()); // ← added
+        printf("  Total parallel workers           : %d\n", nprocs * omp_get_max_threads()); // ← added
 
         Image out;
         out.width    = width;
