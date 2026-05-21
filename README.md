@@ -1,6 +1,6 @@
 ﻿# Parallel Image Convolution
 
-Image convolution implemented using multiple parallelization approaches — **Serial**, **OpenMP**, **POSIX Threads**, **MPI**, and **CUDA** — to compare performance across CPU and GPU. Each version applies a convolution kernel (filter) to an input image pixel-by-pixel and writes the result to an output image.
+Image convolution implemented using multiple parallelization approaches — **Serial**, **OpenMP**, **POSIX Threads**, **MPI**, **CUDA**, and **Hybrid (MPI+OpenMP)** — to compare performance across CPU and GPU. Each version applies a convolution kernel (filter) to an input image pixel-by-pixel and writes the result to an output image.
 
 ## Project Structure
 
@@ -21,6 +21,9 @@ project/
 |   |
 |   +-- mpi/
 |   |   +-- convolution_mpi.c      # Distributed-memory parallel with MPI
+|   |
+|   +-- hybrid/
+|   |   +-- hybrid_mpi_openmp.c    # Hybrid MPI + OpenMP implementation
 |   |
 |   +-- cuda/
 |       +-- convolution_cuda.cu    # GPU implementation using CUDA
@@ -145,7 +148,58 @@ mpirun -np 4 ./convolution_mpi images/input/test_sharp.jpg images/output/sharp_m
 
 ---
 
-### 5. CUDA (GPU)
+### 5. Hybrid MPI + OpenMP (Distributed + Shared Memory)
+
+Combines MPI for inter-process row distribution with OpenMP for intra-process thread-level parallelism. Each MPI rank spawns multiple OpenMP threads, giving hierarchical parallelism.
+
+**Compile:**
+```bash
+mpicc -O2 -fopenmp -o convolution_hybrid src/hybrid/hybrid_mpi_openmp.c src/image_utils.c -I include -lm
+```
+
+**Set OpenMP threads per MPI rank:**
+```bash
+# Linux/macOS
+export OMP_NUM_THREADS=4
+
+# Windows PowerShell
+$env:OMP_NUM_THREADS = 4
+```
+
+**Run (Linux — OpenMPI):**
+```bash
+mpirun -np 4 ./convolution_hybrid images/input/test.jpg images/output/blur_hybrid.jpg blur
+mpirun -np 4 ./convolution_hybrid images/input/test_edge.jpg images/output/edge_hybrid.jpg edge
+mpirun -np 4 ./convolution_hybrid images/input/test_sharp.jpg images/output/sharp_hybrid.jpg sharpen
+```
+
+**Run (Windows — Microsoft MPI):**
+```bash
+mpiexec -n 4 ./convolution_hybrid images/input/test.jpg images/output/blur_hybrid.jpg blur
+mpiexec -n 4 ./convolution_hybrid images/input/test_edge.jpg images/output/edge_hybrid.jpg edge
+mpiexec -n 4 ./convolution_hybrid images/input/test_sharp.jpg images/output/sharp_hybrid.jpg sharpen
+```
+
+**Expected output:**
+```
+Hybrid MPI+OpenMP convolution took : 0.2150 seconds
+  MPI ranks                        : 4
+  OpenMP threads per rank          : 4
+  Total parallel workers           : 16
+```
+
+**Worker scaling guide:**
+
+| MPI Ranks | OMP_NUM_THREADS | Total Workers |
+|-----------|-----------------|---------------|
+| 2         | 2               | 4             |
+| 2         | 4               | 8             |
+| 4         | 4               | 16            |
+| 4         | 8               | 32            |
+
+---
+
+### 6. CUDA (GPU)
 
 #### Windows Setup
 
@@ -259,19 +313,19 @@ nvcc -allow-unsupported-compiler -o convolution_cuda src/cuda/convolution_cuda.c
 
 ### Comparison at 4 Workers (seconds)
 
-| Filter   | Serial   | OpenMP (4T) | POSIX (4T) | MPI (4P) | CUDA (GPU) |
-|----------|----------|-------------|------------|----------|------------|
-| Blur     | 80.7870  | 21.3780     | 21.3648    | 21.7136  | 0.0510     |
-| Edge     | 2.0890   | 0.8140      | 0.5457     | 0.5519   | 0.0114     |
-| Sharpen  | 0.2660   | 0.1020      | 0.0735     | 0.0704   | 0.0039     |
+| Filter   | Serial   | OpenMP (4T) | POSIX (4T) | MPI (4P) | Hybrid (2Rx2T) | CUDA (GPU) |
+|----------|----------|-------------|------------|----------|----------------|------------|
+| Blur     | 80.7870  | 21.3780     | 21.3648    | 21.7136  | 2.3592         | 0.0510     |
+| Edge     | 2.0890   | 0.8140      | 0.5457     | 0.5519   | 0.1160         | 0.0114     |
+| Sharpen  | 0.2660   | 0.1020      | 0.0735     | 0.0704   | 0.1039         | 0.0039     |
 
 ### Speedup vs Serial — 4 Workers
 
-| Filter   | OpenMP (4T) | POSIX (4T) | MPI (4P) | CUDA (GPU) |
-|----------|-------------|------------|----------|------------|
-| Blur     | 3.78x       | 3.78x      | 3.72x    | 1584x      |
-| Edge     | 2.57x       | 3.83x      | 3.78x    | 183x       |
-| Sharpen  | 2.61x       | 3.62x      | 3.78x    | 68x        |
+| Filter   | OpenMP (4T) | POSIX (4T) | MPI (4P) | Hybrid (2Rx2T) | CUDA (GPU) |
+|----------|-------------|------------|----------|----------------|------------|
+| Blur     | 3.78x       | 3.78x      | 3.72x    | 34.24x         | 1584x      |
+| Edge     | 2.57x       | 3.83x      | 3.78x    | 18.01x         | 183x       |
+| Sharpen  | 2.61x       | 3.62x      | 3.78x    | 2.56x          | 68x        |
 
 ---
 
@@ -313,6 +367,8 @@ nvcc -allow-unsupported-compiler -o convolution_cuda src/cuda/convolution_cuda.c
 
 12. **Consistent results across runs** — All implementations show stable, reproducible performance with minimal variance between runs, confirming the benchmarks are reliable on this 4-core Azure VM with Tesla T4 GPU environment.
 
+13. **Hybrid MPI+OpenMP enables hierarchical parallelism** — By combining MPI for inter-process row distribution with OpenMP for intra-process thread parallelism, the hybrid approach can exploit both distributed and shared memory simultaneously. On a multi-node cluster, this allows scaling beyond a single machine's core count while keeping communication overhead low.
+
 ---
 
 ## Source Code Details
@@ -342,6 +398,17 @@ nvcc -allow-unsupported-compiler -o convolution_cuda src/cuda/convolution_cuda.c
 - Uses MPI_Bcast for metadata distribution and MPI_Barrier for synchronization
 - Uses MPI_Wtime() for timing
 - Process count controlled via mpiexec -n (Windows) or mpirun -np (Linux)
+
+### Hybrid MPI+OpenMP Implementation (src/hybrid/hybrid_mpi_openmp.c)
+- Uses MPI_Init_thread with MPI_THREAD_FUNNELED so only the main thread calls MPI while OpenMP threads run freely inside each rank
+- MPI_Bcast distributes image data and kernel to all ranks
+- Each rank receives a contiguous block of rows based on rank ID and total process count
+- `#pragma omp parallel for collapse(2) schedule(dynamic, 4)` parallelises the pixel loop within each rank
+- apply_kernel() is thread-safe — reads only from shared read-only buffers
+- MPI_Gatherv collects variable-length results from each rank back to rank 0
+- MPI_Reduce with MPI_MAX reports the true wall-clock bottleneck across all ranks
+- Reports MPI ranks, OpenMP threads per rank, and total parallel workers
+- Thread count controlled via OMP_NUM_THREADS; process count via mpirun -np or mpiexec -n
 
 ### CUDA Implementation (src/cuda/convolution_cuda.cu)
 - GPU-accelerated convolution using CUDA kernels (NVIDIA CUDA Programming Guide)
