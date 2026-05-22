@@ -133,15 +133,33 @@ int main(int argc, char *argv[]) {
 
     MPI_Bcast(kernel, kernel_size * kernel_size, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
-    int rows_per_proc = height / size;
-    int local_pixels = rows_per_proc * width * channels;
+    int base_rows = height / size;
+    int remainder_rows = height % size;
+    int local_rows = base_rows + (rank < remainder_rows ? 1 : 0);
+    int local_pixels = local_rows * width * channels;
+
+    int *counts = NULL;
+    int *displs = NULL;
+    if (rank == 0) {
+        counts = (int*)malloc(size * sizeof(int));
+        displs = (int*)malloc(size * sizeof(int));
+
+        int offset = 0;
+        for (int r = 0; r < size; r++) {
+            int rows_for_rank = base_rows + (r < remainder_rows ? 1 : 0);
+            counts[r] = rows_for_rank * width * channels;
+            displs[r] = offset;
+            offset += counts[r];
+        }
+    }
 
     unsigned char *local_input = (unsigned char*)malloc(local_pixels);
     unsigned char *local_output = (unsigned char*)malloc(local_pixels);
 
-    MPI_Scatter(
+    MPI_Scatterv(
         input ? input->data : NULL,
-        local_pixels,
+        counts,
+        displs,
         MPI_UNSIGNED_CHAR,
         local_input,
         local_pixels,
@@ -152,7 +170,7 @@ int main(int argc, char *argv[]) {
 
     Image local_img;
     local_img.width = width;
-    local_img.height = rows_per_proc;
+    local_img.height = local_rows;
     local_img.channels = channels;
     local_img.data = local_input;
 
@@ -161,7 +179,7 @@ int main(int argc, char *argv[]) {
     double start = MPI_Wtime();
 
     // Perform convolution
-    for (int y = 0; y < rows_per_proc; y++) {
+    for (int y = 0; y < local_rows; y++) {
         for (int x = 0; x < width; x++) {
             for (int c = 0; c < channels; c++) {
 
@@ -185,12 +203,13 @@ int main(int argc, char *argv[]) {
         output->data = (unsigned char*)malloc(width * height * channels);
     }
 
-    MPI_Gather(
+    MPI_Gatherv(
         local_output,
         local_pixels,
         MPI_UNSIGNED_CHAR,
         output ? output->data : NULL,
-        local_pixels,
+        counts,
+        displs,
         MPI_UNSIGNED_CHAR,
         0,
         MPI_COMM_WORLD
@@ -211,6 +230,11 @@ int main(int argc, char *argv[]) {
 
     free(local_input);
     free(local_output);
+
+    if (rank == 0) {
+        free(counts);
+        free(displs);
+    }
 
     if (rank != 0)
         free(kernel);
