@@ -686,7 +686,7 @@ a single seam boundary vs.\ three in MPI (4 ranks), hence
 reducing the error by about half. CUDA is very close to perfect (max 1 pixel difference in blur only).
 
 \begin{notebox}
-\textbf{Fix:} The MPI/Hybrid seam artefacts can be eliminated by using the following:
+The MPI/Hybrid seam artefacts can be eliminated by using the following:
 Before convolution: \emph{halo exchange} to each non-root process.
 $h$ rows immediately above its chunk from the preceding rank via
 The code below sends and receives from other processes, and adds them as ghost zone.
