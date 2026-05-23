@@ -115,6 +115,7 @@ For a $W \times H$ image with $C$ channels, Eq.~\eqref{eq:conv} requires
 $W \cdot H \cdot C \cdot k^2$ multiply-accumulate operations. For our Gaussian
 blur kernel ($k=21$, $k^2=441$) applied on a $2000\!\times\!1333$ image with $C=3$
 channels this results in $\approx\!3.5\times10^9$ operations, hence clearly motivating parallelism.
+We also evaluate a $3\!\times\!3$ edge detection kernel and a $3\!\times\!3$ sharpen kernel to contrast compute-bound vs.\ memory-bound behaviour.
 
 This report presents five parallel implementations (OpenMP, POSIX Pthreads, MPI, CUDA, and a Hybrid MPI+OpenMP approach) with an analysis based on correctness compared to the serial baseline using Root Mean Square Error (RMSE), and benchmarks execution time as a function of the degree of parallelism.
 
@@ -130,7 +131,7 @@ dividing the rows into continuous segments to be processed by the parallel worke
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[foent=\small, >=Stealth]
+\begin{tikzpicture}[font=\small, >=Stealth]
 
   % --- colour palette (muted, professional) ---
   \definecolor{c0}{RGB}{255,255,255}  
@@ -194,20 +195,12 @@ The serial implementation iterates over every $(y, x, c)$ triplet in a triple ne
     \centering
     \includegraphics[width=0.5\linewidth]{images/serial.png}
     \caption{Serial convolution control flow}
-    \label{fig:result}
+    \label{fig:serial-flow}
 \end{figure}
 % ─────────────────────────────────────────────────────────────────────────────
 \subsection{OpenMP --- Shared-Memory Thread Parallelism}
 
-OpenMP parallelises the two outermost loops using a single compiler directive:
-
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=1.0\linewidth]{images/openmp_code.png}
-    \caption{OpenMP parallel region}
-    \label{fig:result}
-\end{figure}
-% 
+OpenMP parallelises the two outermost loops using a single compiler directive.
 
 \textbf{Key concepts:}
 \begin{itemize}
@@ -216,11 +209,11 @@ OpenMP parallelises the two outermost loops using a single compiler directive:
   \item All threads access same read-only input and kernel; each thread writes to unique output locations. Therefore, no mutex is required.
 \end{itemize}
 
-\begin{figure}[h]
+\begin{figure}[H]
     \centering
     \includegraphics[width=1.0\linewidth]{images/openmp.png}
     \caption{OpenMP fork-join model}
-    \label{fig:result}
+    \label{fig:openmp-forkjoin}
 \end{figure}
 % 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -240,7 +233,7 @@ The POSIX implementation manually creates $T$ threads and each thread is assigne
     \centering
     \includegraphics[width=1.0\linewidth]{images/posix.png}
     \caption{POSIX pthread model: static row-block assignment, explicit join}
-    \label{fig:result}
+    \label{fig:posix-model}
 \end{figure}
 % 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -252,15 +245,14 @@ gathers results after local convolution.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1.0\linewidth]{images/mpi.png}
-    \caption{ MPI communication timeline for 4 processes (Bcast → Scatterv → local compute
-→ Barrier → Gatherv)}
-    \label{fig:result}
+    \includegraphics[width=1.0\linewidth]{images/mpi_timeline.png}
+    \caption{MPI communication timeline for 4 processes (Bcast $\to$ Scatterv $\to$ local compute $\to$ Barrier $\to$ Gatherv).}
+    \label{fig:mpi-timeline}
 \end{figure}
 
 \textbf{Key concepts:}
 \begin{itemize}
-  \item \texttt{MPI\_Bcast} - one-to-allcommunication used for broadcasting size of image and kernel weights.
+  \item \texttt{MPI\_Bcast} - one-to-all communication used for broadcasting size of image and kernel weights.
   \item \texttt{MPI\_Scatterv} - variable-length row chunks (handles $H \bmod P \neq 0$ via \texttt{counts}/\texttt{displs} arrays).
   \item \texttt{MPI\_Barrier} - synchronizes all ranks before timing stops.
   \item \texttt{MPI\_Gatherv} - many-to-one operation for collecting output values at rank 0.
@@ -284,7 +276,7 @@ In CUDA, one GPU thread per output pixel is mapped using a two-dimensional grid 
     scale=0.82,
     >=Stealth
 ]
-=
+
 \draw[step=0.5,gray!35,thin] (0,0) grid (8,6);
 \draw[thick] (0,0) rectangle (8,6);
 
@@ -422,7 +414,7 @@ communication overhead per core.
     \caption{Hybrid MPI+OpenMP two-level parallelism. Level 1 (MPI) distributes row
 chunks across processes; Level 2 (OpenMP) parallelises each process’s local computation
 across T threads, eliminating per-core MPI communication overhead}
-    \label{fig:result}
+    \label{fig:hybrid-model}
 \end{figure}
 
 
@@ -487,30 +479,10 @@ Let $A$ be a serial image and $B$ be a parallel output image (both $W\!\times\!H
 RMSE $= 0$ means bit-exact agreement; values $\lesssim 1.0$ (on the 0--255
 scale) are perceptually invisible.
 
-\subsection{Expected Sources of Error by Implementation}
-
-\textbf{OpenMP / POSIX / Hybrid (OpenMP layer):}
-Each pixel's convolution is the same floating point operation
-in the same order as serial. RMSE $= 0$ (bit-exact).
-
-\textbf{MPI / Hybrid (MPI layer) --- boundary-seam artefact:}
-When the image is split into $P$ row chunks, the top rows of each non-root
-chunk have their neighbour lookups clamped to the \emph{local} row 0, not
-to the last row of the preceding chunk. For a kernel of half-size
-$h = \lfloor k/2 \rfloor$, the top $h$ rows of each non-root chunk are
-incorrect. The Hybrid implementation inherits this through its MPI scatter.
-
-\textbf{CUDA --- floating-point rounding order:}
-IEEE 754 floating-point addition is not associative. Threads within a warp
-accumulate partial sums in a different order from the sequential loop,
-producing sub-LSB rounding differences. In practice, we observed at most
-$\pm 1$ pixel difference only for Gaussian blur; edge and sharpen are
-bit-exact on our Tesla T4.
-
 \subsection{RMSE Results}
 
-Conducted on \texttt{images/input/test.jpg} ($3840\!\times\!2160$ pixels, RGB) on blur.
-and edge, and \texttt{images/input/test\_sharp.jpg} ($1252\!\times\!896$ RGB).
+Conducted on \texttt{images/input/test.jpg} ($3840\!\times\!2160$ pixels, RGB) on blur
+and edge, and \texttt{images/input/test\_sharp.jpg} ($1252\!\times\!896$ RGB)
 for sharpen.
 
 \begin{table}[H]
@@ -602,7 +574,7 @@ Hybrid 4$\times$2 & --- & --- & --- & 4.49  & 18.1$\times$ \\
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.95\linewidth]{figures/blur_time.png}
-\caption{Execution time vs.\ worker count for Gaussian blur (log--log axes make the gap between CPU, hybrid and CUDA clearly visible).}
+\caption{Execution time vs.\ worker count for Gaussian blur.}
 \label{fig:blur-time}
 \end{figure}
 
@@ -615,7 +587,7 @@ This is due to optimized hybrid MPI+OMP code path.
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.95\linewidth]{figures/blur_speedup.png}
-\caption{Speedup curves for Gaussian blur. All CPU implementations plateau at $\approx 4\times$ (physical core count); the hybrid point at 8 workers reaches $\approx 18\times$.}
+\caption{Speedup curves for Gaussian blur. All CPU implementations plateau at $\approx 4\times$ (physical core count); the hybrid point at 8 workers reaches $\approx 18\times$. (CUDA and Hybrid-best omitted; their $>$1000$\times$ speedup would compress the CPU curves.)}
 \label{fig:speedup}
 \end{figure}
 
@@ -639,7 +611,7 @@ law). With $S(4) = 4.0$ we estimate $f < 0.5\%$, implying a theoretical
 maximum of $>200\times$ with unlimited cores.
 
 The actual constraint on this system is \textbf{hardware parallelism} (4 cores),
-not sequential code. This is corroborated by CUDA with $1054\times$ speedup.
+not sequential code. This is corroborated by CUDA with $1054\times$ speedup
 on the same workload using thousands of GPU threads.
 
 \subsection{Hybrid MPI+OpenMP Configurations}
@@ -755,7 +727,7 @@ CUDA     & 0.012 & 175$\times$  & 0.004 & 67$\times$ \\
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.95\linewidth]{figures/edge_speedup.png}
-\caption{Edge detection --- speedup over the serial baseline. POSIX and MPI scale almost linearly up to 4 physical cores; OpenMP suffers a larger parallel-region overhead for this small ($3\!\times\!3$) kernel.}
+\caption{Edge detection --- speedup over the serial baseline. POSIX and MPI scale almost linearly up to 4 physical cores; OpenMP suffers a larger parallel-region overhead for this small ($3\!\times\!3$) kernel. (CUDA and Hybrid-best omitted; their $>$1000$\times$ speedup would compress the CPU curves.)}
 \label{fig:edge-speedup}
 \end{figure}
 
@@ -769,63 +741,65 @@ CUDA     & 0.012 & 175$\times$  & 0.004 & 67$\times$ \\
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.95\linewidth]{figures/sharpen_speedup.png}
-\caption{Sharpen --- speedup over the serial baseline. Adding workers beyond 4 cores yields no further gain.}
+\caption{Sharpen --- speedup over the serial baseline. Adding workers beyond 4 cores yields no further gain. (CUDA and Hybrid-best omitted; their $>$1000$\times$ speedup would compress the CPU curves.)}
 \label{fig:sharpen-speedup}
 \end{figure}
 
-\subsection{Memory Bandwidth Bottleneck}
-
-The arithmetic intensity (AI) of 2D convolution is:
-\begin{equation}
-  \text{AI} \;=\;
-  \frac{W \cdot H \cdot C \cdot k^2 \;\text{FLOPs}}
-       {(W \cdot H \cdot C) \cdot (\text{read} + \text{write}) \;\text{bytes}}
-  \;\approx\;
-  \frac{k^2}{2}
-  \quad\text{FLOPs/byte (ignoring kernel reuse)}
-\end{equation}
-
-\begin{table}[H]
-\centering
-\caption{Arithmetic intensity and compute regime for each filter.}
-\label{tab:ai}
-\begin{tabular}{lccc}
-\toprule
-\textbf{Filter} & \textbf{kernel ($k^2$)} & \textbf{AI (FLOP/byte)} & \textbf{Bottleneck} \\
-\midrule
-Gaussian Blur   & 441 & $\approx220$ & Compute-bound \\
-Edge Detection  & 9   & $\approx4.5$ & Memory-bandwidth-bound \\
-Sharpen         & 9   & $\approx4.5$ & Memory-bandwidth-bound \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-This explains why:
-\begin{itemize}
-  \item Gaussian blur scales well with increasing number of threads (compute-bound)
-        --- more cores is roughly the same amount of throughput.
-  \item The Edge / Sharpen plateau has been reached earlier (memory-bound --- adding
-        threads cannot exceed the L3 or DRAM bandwidth ceiling, which is
-        shared among all cores).
-  \item CUDA excels for both: its HBM/GDDR memory is $5$--$10\times$ faster
-        bandwidth than CPU DRAM, and its constant-memory broadcast
-        lowers the cost of loading the kernels to almost nothing.
-\end{itemize}
-
 \subsection{Parallel Efficiency}
 
+Parallel efficiency measures how well each worker is utilised:
+\[
+  E(p) = \frac{S(p)}{p} = \frac{T_{\text{serial}}}{p \cdot T_{\text{parallel}}(p)}
+\]
+Using $T_{\text{serial}} = 81.43$\,s from Table~\ref{tab:blur-timing}:
+
+\textbf{OpenMP:}
+\begin{align*}
+  p=1:&\quad S = 81.43/81.19 = 1.003,\quad E = 1.003/1 = 100.3\% \\
+  p=2:&\quad S = 81.43/40.46 = 2.013,\quad E = 2.013/2 = 100.6\% \\
+  p=4:&\quad S = 81.43/20.61 = 3.951,\quad E = 3.951/4 = 98.8\% \\
+  p=8:&\quad S = 81.43/20.58 = 3.957,\quad E = 3.957/8 = 49.5\%
+\end{align*}
+
+\textbf{POSIX:}
+\begin{align*}
+  p=1:&\quad S = 81.43/81.68 = 0.997,\quad E = 0.997/1 = 99.7\% \\
+  p=2:&\quad S = 81.43/39.67 = 2.053,\quad E = 2.053/2 = 102.7\% \\
+  p=4:&\quad S = 81.43/20.16 = 4.039,\quad E = 4.039/4 = 101.0\% \\
+  p=8:&\quad S = 81.43/20.05 = 4.062,\quad E = 4.062/8 = 50.8\%
+\end{align*}
+
+\textbf{MPI:}
+\begin{align*}
+  p=1:&\quad S = 81.43/80.19 = 1.015,\quad E = 1.015/1 = 101.6\% \\
+  p=2:&\quad S = 81.43/39.89 = 2.041,\quad E = 2.041/2 = 102.1\% \\
+  p=4:&\quad S = 81.43/20.24 = 4.023,\quad E = 4.023/4 = 100.6\% \\
+  p=8:&\quad S = 81.43/20.50 = 3.972,\quad E = 3.972/8 = 49.7\%
+\end{align*}
+
+\textbf{CUDA} (2560 cores):
+\[
+  S = 81.43/0.0773 = 1054,\quad E = 1054/2560 = 41.2\%
+\]
+
+\textbf{Hybrid 4$\times$2} (8 workers):
+\[
+  S = 81.43/4.49 = 18.1,\quad E = 18.1/8 = 226\%\;\text{(super-linear)}
+\]
+
 \begin{table}[H]
 \centering
-\caption{Parallel efficiency $E(p) = S(p)/p$ for Gaussian Blur.}
+\caption{Summary of parallel efficiency $E(p) = S(p)/p$ for Gaussian Blur.}
 \label{tab:efficiency}
-\begin{tabular}{lccc}
+\begin{tabular}{lccccc}
 \toprule
-\textbf{Workers} & \textbf{OpenMP} & \textbf{POSIX} & \textbf{MPI} \\
+\textbf{Workers} & \textbf{OpenMP} & \textbf{POSIX} & \textbf{MPI} & \textbf{CUDA} & \textbf{Hybrid 4$\times$2} \\
 \midrule
-1 & 100.3\% & 99.7\% & 101.6\% \\
-2 & 100.6\% & 102.7\% & 102.1\% \\
-4 & 98.8\%  & 101.0\% & 100.6\% \\
-8 & 49.4\%  & 50.8\%  & 49.6\% \\
+1 & 100.3\% & 99.7\% & 101.6\% & --- & --- \\
+2 & 100.6\% & 102.7\% & 102.1\% & --- & --- \\
+4 & 98.8\%  & 101.0\% & 100.6\% & --- & --- \\
+8 & 49.5\%  & 50.8\%  & 49.7\% & --- & 226\% \\
+2560 & --- & --- & --- & 41.2\% & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
