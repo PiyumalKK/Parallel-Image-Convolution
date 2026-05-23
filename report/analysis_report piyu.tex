@@ -591,7 +591,7 @@ Scalability   & SMP cores & SMP cores & Nodes & SMs/VRAM & Nodes$\times$cores \\
 
 \subsection{Metric: Root Mean Square Error (RMSE)}
 
-For a serial reference image $A$ and parallel output $B$ (each $W\!\times\!H\!\times\!C$):
+Let $A$ be a serial image and $B$ be a parallel output image (both $W\!\times\!H\!\times\!C$):
 
 \begin{equation}
   \mathrm{RMSE}(A,B) \;=\;
@@ -607,7 +607,7 @@ scale) are perceptually invisible.
 \subsection{Expected Sources of Error by Implementation}
 
 \textbf{OpenMP / POSIX / Hybrid (OpenMP layer):}
-Each pixel's convolution performs exactly the same floating-point operations
+Each pixel's convolution is the same floating point operation
 in the same order as serial. RMSE $= 0$ (bit-exact).
 
 \textbf{MPI / Hybrid (MPI layer) --- boundary-seam artefact:}
@@ -626,8 +626,8 @@ bit-exact on our Tesla T4.
 
 \subsection{RMSE Results}
 
-Tested on \texttt{images/input/test.jpg} ($3840\!\times\!2160$, RGB) for blur
-and edge, and \texttt{images/input/test\_sharp.jpg} ($1252\!\times\!896$, RGB)
+Conducted on \texttt{images/input/test.jpg} ($3840\!\times\!2160$ pixels, RGB) on blur.
+and edge, and \texttt{images/input/test\_sharp.jpg} ($1252\!\times\!896$ RGB).
 for sharpen.
 
 \begin{table}[H]
@@ -676,19 +676,20 @@ Hybrid 2$\times$2     & 0.1153 & 0.2019 & 0.7896 & 90  & No (seam) \\
 \legend{Gaussian Blur, Edge Detection, Sharpen}
 \end{axis}
 \end{tikzpicture}
-\caption{RMSE per implementation and filter. OpenMP and POSIX are bit-exact.
-         MPI's largest error is the sharpen seam artefact (RMSE\,=\,1.40, max
-         pixel diff\,=\,99). The Hybrid 2$\times$2 has only one seam boundary
-         (2 MPI ranks) vs.\ MPI's three (4 ranks), hence roughly half the
-         error. CUDA is near-perfect (max 1 pixel diff in blur only).}
+\caption{RMSE comparison across implementations and filters.}
 \label{fig:rmse-bar}
 \end{figure}
 
+Both OpenMP and POSIX are bit-exact. The sharpen seam artefact is the biggest
+error in MPI (RMSE\,=\,1.40, max pixel diff\,=\,99). The Hybrid 2$\times$2 has
+a single seam boundary vs.\ three in MPI (4 ranks), hence
+reducing the error by about half. CUDA is very close to perfect (max 1 pixel difference in blur only).
+
 \begin{notebox}
-\textbf{Fix:} The MPI/Hybrid seam artefact can be eliminated by implementing a
-\emph{halo exchange} before convolution: each non-root process receives the
+\textbf{Fix:} The MPI/Hybrid seam artefacts can be eliminated by using the following:
+Before convolution: \emph{halo exchange} to each non-root process.
 $h$ rows immediately above its chunk from the preceding rank via
-\texttt{MPI\_Sendrecv}, and appends them as a ghost zone.
+The code below sends and receives from other processes, and adds them as ghost zone.
 \end{notebox}
 
 % ═══════════════════════════════════════════════════════════════════════════════
@@ -777,13 +778,13 @@ Hybrid 4$\times$2 & --- & --- & --- & 4.49  & 18.1$\times$ \\
 \addlegendentry{Hybrid 4P$\times$2T}
 \end{axis}
 \end{tikzpicture}
-\caption{Execution time vs.\ worker count for Gaussian blur. All CPU
-         implementations plateau at 4 workers (= physical cores). CUDA
-         achieves $>$1000$\times$ speedup. Hybrid 4$\times$2 (8 total)
-         surprisingly outperforms pure 4-thread runs --- this is due to
-         the independent optimization within the hybrid MPI+OMP code path.}
+\caption{Execution time vs.\ worker count for Gaussian blur.}
 \label{fig:blur-time}
 \end{figure}
+
+All CPU implementations stop at 4 workers (which is the number of physical cores). CUDA achieves
+$>$1000$\times$ speedup. Hybrid 4$\times$2 (8 total) outperforms pure 4-thread runs.
+This is due to optimized hybrid MPI+OMP code path.
 
 \subsection{Speedup and Amdahl's Law}
 
@@ -826,14 +827,14 @@ Hybrid 4$\times$2 & --- & --- & --- & 4.49  & 18.1$\times$ \\
 \addlegendentry{Hybrid 4P$\times$2T ($\approx 18\times$)}
 \end{axis}
 \end{tikzpicture}
-\caption{Speedup curves for the CPU implementations. All three converge to
-         $\approx\!4\times$ at 4 workers --- matching the physical core
-         count. Beyond 4 threads no additional speedup is observed (no
-         hyper-threading benefit). The hybrid point at $18\times$ uses its
-         own optimized MPI+OMP code path with lower overhead than the
-         pure implementations' I/O and kernel-generation code.}
+\caption{Speedup curves for Gaussian blur.}
 \label{fig:speedup}
 \end{figure}
+
+All three CPU implementations meet at $\approx\!4\times$ at 4 workers,
+equal to the amount of physical cores. After 4 threads, there is no further speed up
+(no hyper-threading benefit). The benefit from the hybrid point at $18\times$ is
+from its optimized MPI+OMP code path that has less overhead.
 
 \subsubsection*{Amdahl's Law Fit}
 
@@ -843,21 +844,21 @@ With the sequential fraction $f$, the theoretical maximum speedup is:
   S_{\max}(\infty) = \frac{1}{f}
 \end{equation}
 
-The CPU implementations achieve near-linear speedup up to 4 workers
-($S(4) \approx 4.0$), indicating an extremely small sequential fraction.
-The plateau at 4 is due to having only 4 physical cores --- not Amdahl's
-law. With $S(4) = 4.0$ we estimate $f < 0.5\%$, implying a theoretical
+The CPU implementations have a near-linear speedup up to 4 workers.
+It shows that the sequential fraction is very small ($S(4) \approx 4.0$).
+The 4 is because of 4 physical cores (not Amdahl's
+law). With $S(4) = 4.0$ we estimate $f < 0.5\%$, implying a theoretical
 maximum of $>200\times$ with unlimited cores.
 
-The true bottleneck on this system is \textbf{hardware parallelism} (4 cores),
-not sequential code. This is confirmed by CUDA achieving $1054\times$ speedup
+The actual constraint on this system is \textbf{hardware parallelism} (4 cores),
+not sequential code. This is corroborated by CUDA with $1054\times$ speedup.
 on the same workload using thousands of GPU threads.
 
 \subsection{Hybrid MPI+OpenMP Configurations}
 
-With 4 physical cores, the hybrid implementation distributes work across MPI
-processes (each running OpenMP threads). Table~\ref{tab:hybrid-configs} shows
-Gaussian blur results for various splits totalling 4 and 8 workers.
+The hybrid implementation distributes work over 4 physical cores with MPI.
+Multiple processes (running OpenMP threads). Table~\ref{tab:hybrid-configs} shows
+Results of Gaussian blur for different splits, 4 and 8 workers.
 
 \begin{table}[H]
 \centering
@@ -905,21 +906,21 @@ Pure MPI-8  & 8 & 1 & 8 & 20.50 & 3.97$\times$ \\
     (Hyb 4x1,4.78)(Hyb 2x4,4.64)(Hyb 4x2,4.49)(Pure MPI-8,20.50)};
 \end{axis}
 \end{tikzpicture}
-\caption{Hybrid vs.\ pure implementations. The hybrid code achieves
-         $\approx\!4.5$\,s for blur regardless of how the workers are
-         split --- a $\approx\!18\times$ speedup over serial. This large
-         improvement over pure OpenMP/MPI ($\approx\!20$\,s at 4+ threads)
-         is because the hybrid's local convolution function
-         (\texttt{apply\_kernel\_local}) has a simpler memory access pattern
-         (no Image struct pointer indirection), enabling better compiler
-         optimization. The \textbf{4P$\times$2T} split is marginally fastest.}
+\caption{Hybrid vs.\ pure implementation execution times.}
 \label{fig:hybrid-bar}
 \end{figure}
 
+The hybrid code obtains the blur time of $\approx\!4.5$\,s, independent of how the
+workers are split, a $\approx\!18\times$ faster than serial. This
+improvement over pure OpenMP/MPI ($\approx\!20$\,s at 4+ threads) is because
+the memory use pattern of the hybrid's \texttt{apply\_kernel\_local} is simpler,
+Allowing for better compiler optimizations. The split of \textbf{4P$\times$2T} is
+marginally fastest.
+
 \subsection{CUDA Performance}
 
-The CUDA implementation with $16\!\times\!16$ thread blocks on the Tesla T4
-(40 SMs) delivers the highest absolute speedup:
+This implementation is CUDA version that runs on $16\!\times\!16$ blocks on the Tesla T4
+(40 SMs) has the best absolute speedup:
 
 \begin{table}[H]
 \centering
@@ -936,17 +937,17 @@ Sharpen ($3\!\times\!3$)         & 0.26  & 0.0039 & 67$\times$ \\
 \end{tabular}
 \end{table}
 
-The Tesla T4 with 2560 CUDA cores and 300\,GB/s memory bandwidth dominates
-both compute-bound (blur) and memory-bound (edge/sharpen) workloads. The
-constant memory broadcast eliminates redundant kernel-weight reads, while
-shared memory tiling reduces global memory traffic by a factor of
+The Tesla T4, having 2560 CUDA cores and 300\,GB/s memory bandwidth, is the leader
+in both compute-intensive (blur) and memory-intensive (edge/sharpen) workloads.
+Constant memory broadcast avoids redundant kernel-weight reads, while
+shared memory tiling decreases global memory traffic by a factor of
 $\approx k^2 / (1 + 2h/\text{TILE})^2$.
 
 \subsection{Edge Detection and Sharpen ($3 \times 3$)}
 
-For small kernels the compute intensity drops $49\times$ (from $441$ to $9$
-multiplications per pixel). Memory bandwidth becomes the bottleneck and
-parallel speedup is lower.
+In the case of small kernels, the compute intensity decreases $49\times$ (from $441$ to $9$
+multiplications per pixel). Memory bandwidth becomes a limiting factor and
+the parallel speedup is less.
 
 \begin{table}[H]
 \centering
@@ -998,14 +999,14 @@ Sharpen         & 9   & $\approx4.5$ & Memory-bandwidth-bound \\
 
 This explains why:
 \begin{itemize}
-  \item \textbf{Gaussian blur} scales well with more threads (compute-bound
-        --- more cores $\approx$ proportionally more throughput).
-  \item \textbf{Edge / Sharpen} plateau earlier (memory-bound --- adding
+  \item Gaussian blur scales well with increasing number of threads (compute-bound)
+        --- more cores is roughly the same amount of throughput.
+  \item The Edge / Sharpen plateau has been reached earlier (memory-bound --- adding
         threads cannot exceed the L3 or DRAM bandwidth ceiling, which is
-        shared across all cores).
-  \item \textbf{CUDA} excels for both: its HBM/GDDR memory offers $5$--$10\times$
-        higher bandwidth than CPU DRAM, and its constant-memory broadcast
-        reduces effective kernel-load cost to nearly zero.
+        shared among all cores).
+  \item CUDA excels for both: its HBM/GDDR memory is $5$--$10\times$ faster
+        bandwidth than CPU DRAM, and its constant-memory broadcast
+        lowers the cost of loading the kernels to almost nothing.
 \end{itemize}
 
 \subsection{Parallel Efficiency}
@@ -1026,44 +1027,44 @@ This explains why:
 \end{tabular}
 \end{table}
 
-All three CPU implementations achieve near-perfect efficiency ($\approx100\%$)
-up to 4 workers, matching the 4 physical cores of the VM. At 8 workers,
-efficiency drops to $\approx50\%$ because there are only 4 hardware execution
-units --- the extra threads share cores with no hyper-threading benefit.
-This confirms the system is \textbf{core-count limited}, not algorithmically
+All three CPU implementations have almost $100\%$ efficiency
+up to 4 workers, matching the 4 physical cores of VM. At 8 workers,
+there are only 4 hardware execution units and efficiency decreases to about $\approx50\%$.
+Extra threads do not get any hyper-threading advantage as they share the same cores.
+This is a confirmation that it is a \textbf{core-count limited} system, not algorithmically
 limited.
 
 % ═══════════════════════════════════════════════════════════════════════════════
 \section{Conclusion}
 
-This report presented five parallel implementations of 2D image convolution
-and evaluated them on correctness (RMSE vs.\ serial), execution time, speedup,
+In this report we presented five parallel implementations of 2D image convolution
+and tested them for correctness (RMSE vs.\ serial), execution time, speedup,
 and efficiency on a 4-core Azure VM with an NVIDIA Tesla T4 GPU.
 
 \begin{enumerate}
-  \item \textbf{OpenMP} achieved $3.95\times$ speedup at 4 threads with
-        minimal code change, demonstrating near-perfect parallel efficiency
-        on all available cores.
-  \item \textbf{POSIX Pthreads} achieved $4.04\times$ at 4 threads ---
-        marginally better than OpenMP due to its simpler static partitioning
-        avoiding OpenMP's dynamic scheduling overhead for this regular workload.
+  \item OpenMP achieved speedup of $3.95\times$ at 4 threads.
+        Near perfect parallel efficiency; minimal code change
+        for all cores available.
+  \item At 4 threads, \textbf{POSIX Pthreads} performed best with a $4.04\times$ factor.
+        Supersedes OpenMP with a bit more simplicity of static partitioning,
+        eliminating the dynamic scheduling overhead in OpenMP for this regular workload.
   \item \textbf{MPI} achieved $4.02\times$ at 4 processes with identical
-        scaling to POSIX, but introduces a boundary-seam artefact
-        (RMSE up to 1.40 for sharpen) that requires halo-exchange to fix.
-  \item \textbf{CUDA} delivered the highest absolute speedup
+        scaling to POSIX, but creates the boundary-seam artefact
+        (RMSE up to 1.40 for sharpen) to be rectified by halo-exchange.
+  \item The best absolute speedup was from \textbf{CUDA}
         ($1054\times$ for blur, $175\times$ for edge) by exploiting 2560
         GPU cores with shared-memory tiling and constant-memory kernel caching.
-  \item \textbf{Hybrid MPI+OpenMP} achieved $\approx\!18\times$ speedup
-        ($4.49$\,s for blur) due to its optimized local convolution function.
-        The 4P$\times$2T configuration was marginally fastest. On multi-node
-        clusters, this approach would scale further by distributing MPI ranks
+  \item \textbf{Hybrid MPI+OpenMP} brought about $\approx\!18\times$ speedup
+        ($4.49$\,s for blur) because of its optimized local convolution function.
+        The 4P$\times$2T configuration was slightly the quickest. On multi-node
+        clusters this would scale further by distributing MPI ranks
         across nodes.
 \end{enumerate}
 
 All implementations are perceptually correct (RMSE $< 1.5$) relative to the
 serial baseline. OpenMP and POSIX are bit-exact. The Gaussian blur filter
-is compute-bound and scales linearly up to the core count; edge detection
-and sharpening are memory-bandwidth-bound. The true performance ceiling on
+is compute-bound and scales linearly with the number of cores;
+memory bandwidth is the limiting factor for edge detection and sharpening. The true performance ceiling on
 this system is hardware parallelism (4 cores), not Amdahl's sequential
 fraction --- confirmed by CUDA's three-orders-of-magnitude speedup.
 
