@@ -99,7 +99,7 @@ Image* convolve_posix(Image *input, float *kernel, int kernel_size, int num_thre
     pthread_t   *threads = (pthread_t*)malloc(num_threads * sizeof(pthread_t));
     ThreadArgs  *args    = (ThreadArgs*)malloc(num_threads * sizeof(ThreadArgs));
 
-    // Initialize thread attribute and explicitly set joinable (LLNL tutorial best practice)
+    // Initialize thread attribute and explicitly set joinable
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);

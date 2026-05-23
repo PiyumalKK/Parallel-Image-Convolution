@@ -8,7 +8,7 @@ extern "C" {
     #include "../include/image_utils.h"
 }
 
-// CUDA error checking macro (CUDA Programming Guide - Error Handling)
+// CUDA error checking macro
 #define CUDA_CHECK(call) do { \
     cudaError_t err = call; \
     if (err != cudaSuccess) { \
@@ -22,7 +22,7 @@ extern "C" {
 #define MAX_KERNEL_SIZE 21
 #define MAX_KERNEL_ELEMS (MAX_KERNEL_SIZE * MAX_KERNEL_SIZE)
 
-// Constant memory for convolution kernel (CUDA Programming Guide - Constant Memory)
+// Constant memory for convolution kernel
 // Constant memory is cached and broadcast to all threads in a warp,
 // making it ideal for read-only data accessed uniformly by all threads.
 __constant__ float d_const_kernel[MAX_KERNEL_ELEMS];
@@ -54,7 +54,7 @@ float sharpen_3x3[9] = {
     0, -1, 0
 };
 
-// CUDA kernel with shared memory tiling (CUDA Programming Guide - Shared Memory)
+// CUDA kernel with shared memory tiling
 // Each thread block loads a tile of input pixels (including halo region) into
 // shared memory, reducing redundant global memory accesses for overlapping
 // convolution neighborhoods.
@@ -144,7 +144,7 @@ Image* convolve_cuda(Image *input, float *kern, int kernel_size) {
     output->channels = channels;
     output->data = (unsigned char*)malloc(img_size);
 
-    // Copy convolution kernel to constant memory (CUDA Programming Guide)
+    // Copy convolution kernel to constant memory
     // cudaMemcpyToSymbol copies data to __constant__ memory space on device
     CUDA_CHECK(cudaMemcpyToSymbol(d_const_kernel, kern,
                kernel_size * kernel_size * sizeof(float)));
@@ -157,7 +157,7 @@ Image* convolve_cuda(Image *input, float *kern, int kernel_size) {
     // Copy input image to device (Host-to-Device transfer)
     CUDA_CHECK(cudaMemcpy(d_input, input->data, img_size, cudaMemcpyHostToDevice));
 
-    // Configure grid and block dimensions (CUDA Programming Guide - Thread Hierarchy)
+    // Configure grid and block dimensions
     // Block: TILE_WIDTH x TILE_HEIGHT threads (256 threads per block)
     // Grid: enough blocks to cover the entire image
     dim3 block(TILE_WIDTH, TILE_HEIGHT);
@@ -193,7 +193,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Query and print GPU device properties (CUDA Programming Guide - Device Management)
+    // Query and print GPU device properties
     int device_count;
     CUDA_CHECK(cudaGetDeviceCount(&device_count));
     if (device_count == 0) {
@@ -249,7 +249,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Create CUDA events for timing (CUDA Programming Guide - Events and Timing)
+    // Create CUDA events for timing
     // CUDA events provide GPU-accurate timing without CPU synchronization overhead
     cudaEvent_t start, stop;
     CUDA_CHECK(cudaEventCreate(&start));
@@ -274,7 +274,7 @@ int main(int argc, char *argv[]) {
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
 
-    // Reset device (CUDA Programming Guide - Device Management)
+    // Reset device
     cudaDeviceReset();
 
     return 0;
