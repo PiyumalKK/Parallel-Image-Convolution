@@ -1,0 +1,16 @@
+Implementation,Workers,Time
+Serial,2,0.1876
+OpenMP,2,
+POSIX,2,0.178
+MPI,2,0.0672
+Hybrid,2,0.0335
+Serial,4,0.1423
+OpenMP,4,
+POSIX,4,0.1544
+MPI,4,0.0578
+Hybrid,4,0.0255
+Serial,6,0.1337
+OpenMP,6,
+POSIX,6,0.2183
+MPI,6,0.0476
+Hybrid,6,0.055
