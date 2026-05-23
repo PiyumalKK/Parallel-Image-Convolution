@@ -204,6 +204,7 @@ Image* convolve_posix(Image *input, float *kernel, int kernel_size, int num_thre
         return NULL;
     }
 
+    // Initialize thread attribute and explicitly set joinable
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
