@@ -653,30 +653,8 @@ Hybrid 2$\times$2     & 0.1153 & 0.2019 & 0.7896 & 90  & No (seam) \\
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}
-\begin{axis}[
-  ybar, bar width=11pt,
-  width=13.5cm, height=7cm,
-  symbolic x coords={OpenMP,POSIX,MPI,CUDA,Hybrid 2x2},
-  xtick=data, xticklabel style={font=\small},
-  ymin=0, ymax=1.6,
-  ylabel={RMSE (pixel units)},
-  xlabel={Implementation},
-  legend style={at={(0.5,1.03)},anchor=south,legend columns=3,font=\small},
-  enlarge x limits=0.12,
-  nodes near coords, nodes near coords align={vertical},
-  every node near coord/.style={font=\tiny},
-]
-\addplot[fill=ompcol!70]
-  coordinates {(OpenMP,0)(POSIX,0)(MPI,0.2447)(CUDA,0.0016)(Hybrid 2x2,0.1153)};
-\addplot[fill=posixcol!70]
-  coordinates {(OpenMP,0)(POSIX,0)(MPI,0.3815)(CUDA,0)(Hybrid 2x2,0.2019)};
-\addplot[fill=mpicol!70]
-  coordinates {(OpenMP,0)(POSIX,0)(MPI,1.4036)(CUDA,0)(Hybrid 2x2,0.7896)};
-\legend{Gaussian Blur, Edge Detection, Sharpen}
-\end{axis}
-\end{tikzpicture}
-\caption{RMSE comparison across implementations and filters.}
+\includegraphics[width=0.95\linewidth]{figures/rmse_bar.png}
+\caption{RMSE comparison across implementations and filters (lower is better; $0$ means bit-exact).}
 \label{fig:rmse-bar}
 \end{figure}
 
@@ -685,12 +663,7 @@ error in MPI (RMSE\,=\,1.40, max pixel diff\,=\,99). The Hybrid 2$\times$2 has
 a single seam boundary vs.\ three in MPI (4 ranks), hence
 reducing the error by about half. CUDA is very close to perfect (max 1 pixel difference in blur only).
 
-\begin{notebox}
-The MPI/Hybrid seam artefacts can be eliminated by using the following:
-Before convolution: \emph{halo exchange} to each non-root process.
-$h$ rows immediately above its chunk from the preceding rank via
-The code below sends and receives from other processes, and adds them as ghost zone.
-\end{notebox}
+
 
 % ═══════════════════════════════════════════════════════════════════════════════
 \section{Performance Analysis}
@@ -745,40 +718,8 @@ Hybrid 4$\times$2 & --- & --- & --- & 4.49  & 18.1$\times$ \\
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}
-\begin{axis}[
-  width=13cm, height=8.5cm,
-  xlabel={Number of CPU workers (threads or processes)},
-  ylabel={Execution Time (seconds)},
-  title={Gaussian Blur ($21\!\times\!21$) --- Wall-Clock Time},
-  xtick={1,2,4,8},
-  xmin=0.5, xmax=8.5,
-  ymin=0, ymax=90,
-  legend pos=north east,
-  grid=major, grid style={dashed,gray!40},
-  mark size=3.2pt,
-]
-\addplot[color=serialcol, mark=*, thick, dashed]
-  coordinates {(1,81.43)(2,81.43)(4,81.43)(8,81.43)};
-\addlegendentry{Serial}
-\addplot[color=ompcol, mark=square*, thick]
-  coordinates {(1,81.19)(2,40.46)(4,20.61)(8,20.58)};
-\addlegendentry{OpenMP}
-\addplot[color=posixcol, mark=triangle*, thick]
-  coordinates {(1,81.68)(2,39.67)(4,20.16)(8,20.05)};
-\addlegendentry{POSIX Pthreads}
-\addplot[color=mpicol, mark=diamond*, thick]
-  coordinates {(1,80.19)(2,39.89)(4,20.24)(8,20.50)};
-\addlegendentry{MPI}
-\addplot[color=cudacol, mark=pentagon*, thick, dashed]
-  coordinates {(1,0.0773)(8,0.0773)};
-\addlegendentry{CUDA (0.077\,s)}
-\addplot[color=hybridcol, mark=oplus*, thick, densely dotted]
-  coordinates {(8,4.49)};
-\addlegendentry{Hybrid 4P$\times$2T}
-\end{axis}
-\end{tikzpicture}
-\caption{Execution time vs.\ worker count for Gaussian blur.}
+\includegraphics[width=0.95\linewidth]{figures/blur_time.png}
+\caption{Execution time vs.\ worker count for Gaussian blur (log--log axes make the gap between CPU, hybrid and CUDA clearly visible).}
 \label{fig:blur-time}
 \end{figure}
 
@@ -790,44 +731,8 @@ This is due to optimized hybrid MPI+OMP code path.
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}
-\begin{axis}[
-  width=13cm, height=9cm,
-  xlabel={Number of parallel workers $p$},
-  ylabel={Speedup $S(p) = T_1 / T_p$},
-  title={Speedup --- Gaussian Blur ($21\!\times\!21$)},
-  xtick={1,2,4,8},
-  xmin=0.5, xmax=8.5,
-  ymin=0, ymax=8,
-  legend pos=north west,
-  grid=major, grid style={dashed,gray!40},
-  mark size=3.2pt,
-]
-% Ideal linear
-\addplot[black, dashed, thick]
-  coordinates {(1,1)(2,2)(4,4)(8,8)};
-\addlegendentry{Ideal linear}
-
-% Amdahl f=0.005 curve (good fit for 4-core plateau)
-\addplot[gray, dotted, thick, domain=1:8, samples=100]
-  {1/(0.005 + (1-0.005)/x)};
-\addlegendentry{Amdahl ($f=0.005$)}
-
-\addplot[color=ompcol, mark=square*, thick]
-  coordinates {(1,1.003)(2,2.01)(4,3.95)(8,3.96)};
-\addlegendentry{OpenMP}
-\addplot[color=posixcol, mark=triangle*, thick]
-  coordinates {(1,0.997)(2,2.05)(4,4.04)(8,4.06)};
-\addlegendentry{POSIX Pthreads}
-\addplot[color=mpicol, mark=diamond*, thick]
-  coordinates {(1,1.016)(2,2.04)(4,4.02)(8,3.97)};
-\addlegendentry{MPI}
-\addplot[color=hybridcol, mark=oplus*, thick]
-  coordinates {(8,18.1)};
-\addlegendentry{Hybrid 4P$\times$2T ($\approx 18\times$)}
-\end{axis}
-\end{tikzpicture}
-\caption{Speedup curves for Gaussian blur.}
+\includegraphics[width=0.95\linewidth]{figures/blur_speedup.png}
+\caption{Speedup curves for Gaussian blur. All CPU implementations plateau at $\approx 4\times$ (physical core count); the hybrid point at 8 workers reaches $\approx 18\times$.}
 \label{fig:speedup}
 \end{figure}
 
@@ -885,28 +790,8 @@ Pure MPI-8  & 8 & 1 & 8 & 20.50 & 3.97$\times$ \\
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}
-\begin{axis}[
-  ybar, bar width=22pt,
-  width=12cm, height=7cm,
-  symbolic x coords={Pure OMP-4, Hyb 1x4, Hyb 2x2, Hyb 4x1, Hyb 2x4, Hyb 4x2, Pure MPI-8},
-  xtick=data,
-  xticklabel style={font=\small, rotate=20, anchor=east},
-  ymin=0, ymax=22,
-  ylabel={Execution Time (seconds)},
-  xlabel={Configuration},
-  nodes near coords, nodes near coords align={vertical},
-  every node near coord/.style={font=\small},
-  enlarge x limits=0.1,
-  bar width=22pt,
-]
-\addplot[fill=hybridcol!60, draw=hybridcol]
-  coordinates {
-    (Pure OMP-4,20.61)(Hyb 1x4,4.63)(Hyb 2x2,4.58)
-    (Hyb 4x1,4.78)(Hyb 2x4,4.64)(Hyb 4x2,4.49)(Pure MPI-8,20.50)};
-\end{axis}
-\end{tikzpicture}
-\caption{Hybrid vs.\ pure implementation execution times.}
+\includegraphics[width=0.95\linewidth]{figures/hybrid_bar.png}
+\caption{Hybrid vs.\ pure implementation execution times for the Gaussian blur. The hybrid configurations cluster around $4.5$\,s --- roughly $4.5\times$ faster than pure OpenMP/MPI at the same worker count.}
 \label{fig:hybrid-bar}
 \end{figure}
 
@@ -936,6 +821,13 @@ Sharpen ($3\!\times\!3$)         & 0.26  & 0.0039 & 67$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/cuda_vs_serial.png}
+\caption{CUDA (Tesla T4) vs.\ serial baseline across all three filters. The logarithmic $y$-axis exposes differences spanning four orders of magnitude.}
+\label{fig:cuda-bar}
+\end{figure}
 
 The Tesla T4, having 2560 CUDA cores and 300\,GB/s memory bandwidth, is the leader
 in both compute-intensive (blur) and memory-intensive (edge/sharpen) workloads.
@@ -969,6 +861,34 @@ CUDA     & 0.012 & 175$\times$  & 0.004 & 67$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/edge_time.png}
+\caption{Edge detection ($3\!\times\!3$, $3840\!\times\!2160$) --- wall-clock execution time. Each cluster groups the three CPU implementations at a given worker count; the small differences between OpenMP, POSIX and MPI are now clearly readable.}
+\label{fig:edge-time}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/edge_speedup.png}
+\caption{Edge detection --- speedup over the serial baseline. POSIX and MPI scale almost linearly up to 4 physical cores; OpenMP suffers a larger parallel-region overhead for this small ($3\!\times\!3$) kernel.}
+\label{fig:edge-speedup}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/sharpen_time.png}
+\caption{Sharpen ($3\!\times\!3$, $1252\!\times\!896$) --- wall-clock execution time. The smaller image makes the parallel-overhead floor more visible.}
+\label{fig:sharpen-time}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/sharpen_speedup.png}
+\caption{Sharpen --- speedup over the serial baseline. Adding workers beyond 4 cores yields no further gain.}
+\label{fig:sharpen-speedup}
+\end{figure}
 
 \subsection{Memory Bandwidth Bottleneck}
 

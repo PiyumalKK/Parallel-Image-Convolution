@@ -28,7 +28,7 @@ Log "=== COMPILATION ==="
 
 # Compile RMSE compare tool
 Log "Compiling rmse_compare..."
-gcc -O2 -o rmse_compare.exe src/rmse_compare.c src/image_utils.c -I include -lm
+gcc -O2 -o rmse_compare.exe scripts/rmse_compare.c src/image_utils.c -I include -lm
 if ($LASTEXITCODE -ne 0) { Log "ERROR: rmse_compare compilation failed"; exit 1 }
 
 # Compile hybrid (MPI+OpenMP)
