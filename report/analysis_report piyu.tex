@@ -63,24 +63,31 @@
 
 % ─── Title ─────────────────────────────────────────────────────────────────────
 \begin{titlepage}
-  \centering
-  \vspace*{2cm}
-  {\Huge\bfseries Parallel Image Convolution\\[0.4em]
-   \Large Analysis Report\par}
-  \vspace{1.5cm}
-  {\large High Performance Computing (HPC)\\[0.3em]
-   7th Semester --- BSc.\ Engineering\par}
-  \vspace{2cm}
-  \begin{tabular}{ll}
-    \textbf{Implementations:} & Serial, OpenMP, POSIX Pthreads, MPI, CUDA, MPI+OpenMP \\[4pt]
-    \textbf{Filters Tested:}  & Gaussian Blur, Edge Detection, Sharpen \\[4pt]
-    \textbf{Repository:}      & Parallel-Image-Convolution \\[4pt]
-    \textbf{Date:}            & May 2026 \\
-  \end{tabular}
-  \vfill
-  {\large\bfseries Team Members\par}
-  \vspace{0.5cm}
-  Imalsha Ranasinghe\\
+    \centering
+    \vspace*{1cm}
+    
+    \includegraphics[width=3cm]{images/logo.jpg}\\[1cm]
+    
+    {\Large \textbf{Department of Electrical and Information Engineering}}\\[0.3cm]
+    {\large \textbf{University of Ruhuna}}\\[1cm]
+    
+    {\large \textbf{Project Analysis Report}}\\[0.2cm]
+    {\large \textbf{High Performance Computing}}\\[0.2cm]
+    {\large \textbf{EE7218 / EC7207}}\\[1.5cm]
+    
+    {\Large \textbf{Performance Analysis of Parallel Image Convolution}}\\[0.3cm]
+    {\large \textbf{using OpenMP, POSIX Threads, MPI and CUDA}}\\[1cm]
+    
+    {\large \textbf{Group Number: 40}}\\[1cm]
+    
+    \begin{tabular}{p{2.8cm} p{5cm}}
+        EG/2021/4735 & Ranasingha K.K.M.P. \\[0.2cm]
+        EG/2021/4736 & Ranasinghe E.W.G.I.S. \\[0.2cm]
+        EG/2021/4738 & Ranasinghe R.M.W.O.\\
+    \end{tabular}
+    
+    \vfill
+    {\large \today}
 \end{titlepage}
 
 % ─── Table of Contents ─────────────────────────────────────────────────────────
@@ -90,9 +97,9 @@
 % ═══════════════════════════════════════════════════════════════════════════════
 \section{Introduction}
 
-Image convolution is a fundamental operation in computer vision and image
-processing. Given an input image $I$ and a convolution kernel $K$ of size
-$k \times k$, the output pixel at position $(x,y)$ and colour channel $c$ is:
+Image convolution is a crucial process for computer vision and image
+processing applications. Given an input image $I$ and a convolution kernel $K$ of size
+$k \times k$, the output pixel value at position $(x,y)$ and colour channel $c$ is:
 
 \begin{equation}
   O(x,y,c) \;=\;
@@ -106,201 +113,136 @@ $k \times k$, the output pixel at position $(x,y)$ and colour channel $c$ is:
 
 For a $W \times H$ image with $C$ channels, Eq.~\eqref{eq:conv} requires
 $W \cdot H \cdot C \cdot k^2$ multiply-accumulate operations. For our Gaussian
-blur kernel ($k=21$, $k^2=441$) on a $2000\!\times\!1333$ image with $C=3$
-channels this is $\approx\!3.5\times10^9$ operations --- clearly motivating
-parallelism.
+blur kernel ($k=21$, $k^2=441$) applied on a $2000\!\times\!1333$ image with $C=3$
+channels this results in $\approx\!3.5\times10^9$ operations, hence clearly motivating parallelism.
 
-This report describes five parallel implementations (OpenMP, POSIX Pthreads,
-MPI, CUDA, and a Hybrid MPI+OpenMP approach), analyses their correctness
-relative to the serial baseline using Root Mean Square Error (RMSE), and
-benchmarks execution time as a function of the degree of parallelism.
+This report presents five parallel implementations (OpenMP, POSIX Pthreads, MPI, CUDA, and a Hybrid MPI+OpenMP approach) with an analysis based on correctness compared to the serial baseline using Root Mean Square Error (RMSE), and benchmarks execution time as a function of the degree of parallelism.
 
 % ═══════════════════════════════════════════════════════════════════════════════
 \section{Parallel Programming Concepts Applied}
 
 \subsection{Overview of the Parallelisation Strategy}
 
-All parallel implementations exploit the \emph{embarrassingly parallel} nature
-of 2D convolution: each output pixel is computed independently, depending only
-on a fixed-size neighbourhood of \emph{read-only} input pixels. No inter-pixel
-communication is needed during computation; only load balancing and result
-assembly require coordination.
+Parallel implementations leverage the inherently parallelizable nature of 2D convolution, every output pixel calculation occurs independently based on its local neighborhood of  read-only input pixels. No communication between the pixels is necessary in the computation. Load balancing and result assembly are the only places where coordination is necessary.
 
-The dominant decomposition is \textbf{row-block partitioning}: the image rows
-are divided into contiguous chunks and assigned to parallel workers (threads or
-processes), ensuring each worker accesses a contiguous memory region and
-maximising cache locality.
+The primary decomposition technique used is row-block decomposition, which involves 
+dividing the rows into continuous segments to be processed by the parallel workers (threads or processes), ensuring each worker accesses a contiguous memory region.
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[font=\small]
-  \node[draw, fill=lightgray, minimum width=8cm, minimum height=4cm,
-        label=above:\textbf{Input Image ($W \times H$)}] (img) at (0,0) {};
-  \foreach \i/\col in {0/tileA, 1/tileB, 2/tileC, 3/tileD} {
-    \pgfmathsetmacro{\ybot}{-2 + \i}
-    \fill[\col, opacity=0.75] (-4, \ybot) rectangle (4, \ybot+1);
-    \node[right] at (4.15, \ybot+0.5)
-      {\textbf{Worker \i}\ \ rows
-       $[\pgfmathparse{int(\i*25)}\pgfmathresult\%$,
-       $\pgfmathparse{int((\i+1)*25-1)}\pgfmathresult\%\,H)$};
+\begin{tikzpicture}[foent=\small, >=Stealth]
+
+  % --- colour palette (muted, professional) ---
+  \definecolor{c0}{RGB}{255,255,255}  
+  \definecolor{c1}{RGB}{255,255,255}  
+  \definecolor{c2}{RGB}{255,255,255}   
+  \definecolor{c3}{RGB}{255,255,255}  
+
+  % --- image strips ---
+  \def\W{7}   % total width of image block
+  \def\H{4.8} % total height of image block
+  \def\x{-3.5}% left edge x
+
+  % Strip heights (all equal slices)
+  \foreach \i/\col/\label in {
+      0/c0/Worker 0,
+      1/c1/Worker 1,
+      2/c2/Worker 2,
+      3/c3/Worker 3}
+  {
+    \pgfmathsetmacro{\ybot}{ -\H/2 + \i * \H/4 }
+    \pgfmathsetmacro{\ytop}{ -\H/2 + (\i+1) * \H/4 }
+    \pgfmathsetmacro{\ymid}{ (\ybot + \ytop) / 2 }
+    \pgfmathsetmacro{\rstart}{int(\i * 25)}
+    \pgfmathsetmacro{\rend}{int((\i+1)*25)}
+
+    % Filled strip
+    \fill[\col] (\x, \ybot) rectangle (\x+\W, \ytop);
+
+    % Dashed divider between strips (not on top or bottom edge)
+    \ifnum\i>0
+      \draw[dashed, gray!60] (\x, \ybot) -- (\x+\W, \ybot);
+    \fi
+
+    % Worker label inside the strip
+    \node[anchor=west, font=\small\bfseries] at (\x+0.15, \ymid)
+      {\label};
+
+    % Row range label on the right
+    \node[anchor=west, font=\footnotesize] at (\x+\W+0.2, \ymid)
+      {rows $\rstart\%$--$\rend\%\,H$};
   }
-  \draw[thick] (-4,-2) rectangle (4,2);
-  \foreach \y/\lbl in {1.5/0, 0.5/1, -0.5/2, -1.5/3}
-    \draw[thick, -{Stealth}] (4.05,\y) -- (4.05,\y);
+
+  % --- outer border ---
+  \draw[thick] (\x, -\H/2) rectangle (\x+\W, \H/2);
+
+  % --- image label at top ---
+  \node[anchor=south, font=\small\bfseries] at (\x+\W/2, \H/2+0.05)
+    {Input Image ($W \times H$ pixels)};
+
 \end{tikzpicture}
-\caption{Row-block partitioning: contiguous groups of rows are assigned to
-         parallel workers. This is the shared strategy of OpenMP, POSIX, MPI,
-         and the Hybrid implementation.}
+\caption{Row-block partitioning strategy. The image is divided into contiguous horizontal strips and each strip is assigned to one parallel worker (thread or process).}
 \label{fig:rowblock}
 \end{figure}
 
 % ─────────────────────────────────────────────────────────────────────────────
 \subsection{Serial Baseline}
 
-The serial implementation iterates over every $(y, x, c)$ triplet in a triple
-nested loop, calling \texttt{apply\_kernel} for each pixel. Boundary pixels are
-handled by \emph{clamping} coordinates to $[0,W{-}1]$ and $[0,H{-}1]$.
+The serial implementation iterates over every $(y, x, c)$ triplet in a triple nested loop and call apply\_kernel function for each pixel. Boundary pixels are handled by clamping coordinates to $[0,W{-}1]$ and $[0,H{-}1]$.
 
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[
-    node distance=0.55cm,
-    box/.style={draw, rounded corners, minimum width=3.5cm,
-                minimum height=0.75cm, align=center, fill=serialcol!20},
-    arrow/.style={-{Stealth}, thick}
-  ]
-  \node[box] (load)   {Load Image};
-  \node[box, below=of load]   (kernel) {Select Kernel ($k \times k$)};
-  \node[box, below=of kernel] (loop)   {Triple Nested Loop $y \!\to\! x \!\to\! c$};
-  \node[box, below=of loop]   (apply)  {\texttt{apply\_kernel} (per pixel)};
-  \node[box, below=of apply]  (save)   {Save Output Image};
-  \draw[arrow] (load) -- (kernel);
-  \draw[arrow] (kernel) -- (loop);
-  \draw[arrow] (loop) -- (apply);
-  \draw[arrow] (apply) -- (save);
-  \draw[arrow] (apply.east) -- ++(0.9,0) |- (loop.east);
-\end{tikzpicture}
-\caption{Serial convolution control flow.}
-\label{fig:serial-flow}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.5\linewidth]{images/serial.png}
+    \caption{Serial convolution control flow}
+    \label{fig:result}
 \end{figure}
-
-\begin{notebox}
-\textbf{Timing note:} The serial implementation uses \texttt{clock()}, which
-measures \emph{CPU time} (sum across all logical cores), not wall-clock time.
-All parallel implementations use \texttt{omp\_get\_wtime()},
-\texttt{MPI\_Wtime()}, \texttt{clock\_gettime(CLOCK\_MONOTONIC)}, or CUDA
-Events --- all of which measure \emph{elapsed wall-clock time}. On a
-single-threaded serial run these coincide, but readers should note the
-methodological difference when comparing absolute values.
-\end{notebox}
-
 % ─────────────────────────────────────────────────────────────────────────────
 \subsection{OpenMP --- Shared-Memory Thread Parallelism}
 
 OpenMP parallelises the two outermost loops using a single compiler directive:
 
-\begin{lstlisting}[language=C, caption={OpenMP parallel region (convolution\_openmp.c)}]
-#pragma omp parallel for collapse(2) schedule(dynamic) \
-    shared(input, output, kernel, kernel_size)
-for (int y = 0; y < input->height; y++) {
-    for (int x = 0; x < input->width; x++) {
-        for (int c = 0; c < input->channels; c++) {
-            int index = (y * input->width + x) * input->channels + c;
-            output->data[index] = apply_kernel(input, x, y, c, kernel, kernel_size);
-        }
-    }
-}
-\end{lstlisting}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1.0\linewidth]{images/openmp_code.png}
+    \caption{OpenMP parallel region}
+    \label{fig:result}
+\end{figure}
+% 
 
 \textbf{Key concepts:}
 \begin{itemize}
-  \item \texttt{collapse(2)} merges the $y$-$x$ loops into a single iteration
-        space of size $H\!\times\!W$, enabling finer-grained scheduling.
-  \item \texttt{schedule(dynamic)} assigns chunks of the combined iteration
-        space to idle threads at runtime, improving load balance.
-  \item All threads share read-only \texttt{input} and \texttt{kernel};
-        each thread writes to disjoint \texttt{output} indices --- no mutex
-        needed.
+  \item \texttt{collapse(2)} combines the two $y$-$x$ loops into a one iteration space of dimension $H\!\times\!W$, allowing for more detailed scheduling.
+  \item \texttt{schedule(dynamic)} assigns chunks of the combined iteration space to idle threads during execution, resulting in better load balancing.
+  \item All threads access same read-only input and kernel; each thread writes to unique output locations. Therefore, no mutex is required.
 \end{itemize}
 
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[font=\small, node distance=0.45cm]
-  \node[draw, fill=serialcol!15, minimum width=10cm, minimum height=0.9cm,
-        label=left:\textbf{Shared Memory}] (shmem) at (0,3.2) {};
-  \node at (0,3.2) {Input Image \qquad Kernel \qquad Output Image};
-
-  \node[draw, fill=ompcol!30, rounded corners, minimum width=2.2cm,
-        minimum height=0.65cm] (master) at (0,1.8) {Master (Fork)};
-  \draw[thick,-{Stealth}] (master.north) -- (shmem.south);
-
-  \foreach \i/\xpos in {0/-4.5, 1/-1.5, 2/1.5, 3/4.5} {
-    \node[draw, fill=ompcol!20, rounded corners, minimum width=2.1cm,
-          minimum height=0.65cm] (t\i) at (\xpos, 0.4) {Thread \i};
-    \draw[thick,-{Stealth}] (master.south) -- (t\i.north);
-    \node[draw, fill=lightgray, minimum width=2.1cm, minimum height=0.5cm,
-          font=\tiny] (r\i) at (\xpos,-0.5) {dynamic chunk \i};
-    \draw[-{Stealth}] (t\i) -- (r\i);
-  }
-
-  \node[draw, fill=ompcol!30, rounded corners, minimum width=2.2cm,
-        minimum height=0.65cm] (join) at (0,-1.7)
-    {Join (implicit barrier)};
-  \foreach \i in {0,...,3}
-    \draw[thick,-{Stealth}] (r\i.south) -- (join.north);
-  \draw[-{Stealth}] (join.south) -- ++(0,-0.6) node[below]{Save Output};
-\end{tikzpicture}
-\caption{OpenMP fork-join model. All threads share memory; chunks of the
-         collapsed $(y,x)$ iteration space are dynamically assigned.}
-\label{fig:openmp}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1.0\linewidth]{images/openmp.png}
+    \caption{OpenMP fork-join model}
+    \label{fig:result}
 \end{figure}
-
+% 
 % ─────────────────────────────────────────────────────────────────────────────
 \subsection{POSIX Pthreads --- Explicit Thread Management}
 
-The POSIX implementation manually creates $T$ threads, each assigned a
-contiguous block of rows $[\texttt{start\_row},\texttt{end\_row})$ via a
+The POSIX implementation manually creates $T$ threads and each thread is assigned a contiguous block of rows $[\texttt{start\_row},\texttt{end\_row})$ through a
 \texttt{ThreadArgs} struct.
 
 \textbf{Key concepts:}
 \begin{itemize}
-  \item \texttt{pthread\_attr\_setdetachstate(PTHREAD\_CREATE\_JOINABLE)}
-        makes threads explicitly joinable.
-  \item Static partitioning: thread $t$ receives
-        $\lfloor H/T \rfloor + [t < H \bmod T]$ rows.
-  \item No mutexes: output indices are disjoint across threads.
+  \item \texttt{pthread\_attr\_setdetachstate(PTHREAD\_CREATE\_JOINABLE)} ensures threads are explicitly joinable.
+  \item Static partitioning: row allocation to thread $t$ is $\lfloor H/T \rfloor + [t < H \bmod T]$.
+  \item No mutexes are required since output indices are unique across threads.
 \end{itemize}
 
 \begin{figure}[H]
-\centering
-\begin{tikzpicture}[font=\small]
-  \node[draw, fill=posixcol!20, rounded corners, minimum width=9.5cm,
-        minimum height=0.65cm] (main) at (0,3.5)
-    {Main Thread: compute row ranges, \texttt{pthread\_create} $\times T$};
-
-  \foreach \i/\xpos/\s/\e in {0/-4.2/0/{H/T}, 1/-1.4/{H/T}/{2H/T},
-                               2/1.4/{2H/T}/{3H/T}, 3/4.2/{3H/T}/{H}} {
-    \node[draw, fill=posixcol!40, rounded corners, minimum width=2.2cm,
-          minimum height=0.55cm, font=\scriptsize] (th\i) at (\xpos,2.1)
-      {\texttt{ThreadArgs[\i]}};
-    \draw[-{Stealth}] (main.south) -- (th\i.north);
-
-    \node[draw, fill=posixcol!15, rounded corners, minimum width=2.2cm,
-          minimum height=1.2cm, align=center, font=\scriptsize] (wk\i) at (\xpos,0.7)
-      {\texttt{convolve\_}\\\texttt{worker}\\rows \s--\e};
-    \draw[-{Stealth}] (th\i) -- (wk\i);
-  }
-
-  \node[draw, fill=posixcol!20, rounded corners, minimum width=9.5cm,
-        minimum height=0.65cm] (join) at (0,-0.5)
-    {Main Thread: \texttt{pthread\_join} $\times T$ --- all rows written};
-  \foreach \i in {0,...,3}
-    \draw[-{Stealth}] (wk\i.south) -- (join.north);
-\end{tikzpicture}
-\caption{POSIX pthread model: static row-block assignment, explicit join.}
-\label{fig:posix}
+    \centering
+    \includegraphics[width=1.0\linewidth]{images/posix.png}
+    \caption{POSIX pthread model: static row-block assignment, explicit join}
+    \label{fig:result}
 \end{figure}
-
+% 
 % ─────────────────────────────────────────────────────────────────────────────
 \subsection{MPI --- Distributed-Memory Parallelism}
 
@@ -309,126 +251,137 @@ image, broadcasts metadata and kernel weights, scatters row chunks, and
 gathers results after local convolution.
 
 \begin{figure}[H]
-\centering
-\begin{tikzpicture}[font=\small, xscale=0.92]
-  \draw[->] (-0.4, 7.6) -- (-0.4,-0.6) node[below]{\textbf{Time}};
-
-  \foreach \i/\xp/\col in {0/0/mpicol, 1/3/posixcol, 2/6/ompcol, 3/9/serialcol} {
-    \node[font=\bfseries, \col] at (\xp+1,7.9) {Rank \i};
-    \draw[dashed,\col!40] (\xp,7.5) -- (\xp,-0.3);
-    \draw[dashed,\col!40] (\xp+2,7.5) -- (\xp+2,-0.3);
-  }
-
-  % Bcast
-  \node[draw,fill=mpicol!30,minimum width=2cm,minimum height=0.45cm,
-        align=center,font=\tiny] at (1,7.1) {\texttt{MPI\_Bcast} dims+kernel};
-  \foreach \i in {1,2,3} {
-    \node[draw,fill=mpicol!12,minimum width=2cm,minimum height=0.45cm,
-          align=center,font=\tiny] at (\i*3+1,7.1) {recv Bcast};
-    \draw[mpicol,-{Stealth}] (2,7.1) -- (\i*3,7.1);
-  }
-
-  % Scatterv
-  \node[draw,fill=mpicol!30,minimum width=2cm,minimum height=0.45cm,
-        align=center,font=\tiny] at (1,6.1) {\texttt{MPI\_Scatterv}};
-  \node[draw,fill=tileA,minimum width=2cm,minimum height=0.42cm,
-        align=center,font=\tiny] at (1,5.4) {rows 0 -- H/4};
-  \foreach \i/\col in {1/tileB, 2/tileC, 3/tileD} {
-    \node[draw,fill=\col,minimum width=2cm,minimum height=0.42cm,
-          align=center,font=\tiny] at (\i*3+1,6.1) {rows chunk \i};
-    \draw[mpicol,-{Stealth}] (2,6.1) -- (\i*3,6.1);
-  }
-
-  % Compute
-  \foreach \xp in {0,3,6,9}
-    \node[draw,fill=green!15,rounded corners,minimum width=2cm,
-          minimum height=1.3cm,align=center,font=\tiny] at (\xp+1,4.2)
-      {Local\\Convolution};
-
-  % Barrier
-  \draw[red,dashed,thick] (-0.2,3.2) -- (11.2,3.2)
-    node[right,red,font=\tiny]{\texttt{MPI\_Barrier}};
-
-  % Gather
-  \node[draw,fill=mpicol!30,minimum width=2cm,minimum height=0.45cm,
-        align=center,font=\tiny] at (1,2.5) {\texttt{MPI\_Gatherv}};
-  \foreach \i in {1,2,3} {
-    \node[draw,fill=mpicol!12,minimum width=2cm,minimum height=0.45cm,
-          align=center,font=\tiny] at (\i*3+1,2.5) {send results};
-    \draw[mpicol,-{Stealth}] (\i*3,2.5) -- (2,2.5);
-  }
-  \node[draw,fill=mpicol!40,minimum width=2cm,minimum height=0.45cm,
-        align=center,font=\tiny] at (1,1.5) {Save output (rank 0)};
-\end{tikzpicture}
-\caption{MPI communication timeline for 4 processes (Bcast $\to$ Scatterv
-         $\to$ local compute $\to$ Barrier $\to$ Gatherv).}
-\label{fig:mpi}
+    \centering
+    \includegraphics[width=1.0\linewidth]{images/mpi.png}
+    \caption{ MPI communication timeline for 4 processes (Bcast → Scatterv → local compute
+→ Barrier → Gatherv)}
+    \label{fig:result}
 \end{figure}
 
 \textbf{Key concepts:}
 \begin{itemize}
-  \item \texttt{MPI\_Bcast} --- one-to-all broadcast of image dimensions and
-        kernel weights.
-  \item \texttt{MPI\_Scatterv} --- variable-length row chunks (handles
-        $H \bmod P \neq 0$ via \texttt{counts}/\texttt{displs} arrays).
-  \item \texttt{MPI\_Barrier} --- synchronises all ranks before timing stops.
-  \item \texttt{MPI\_Gatherv} --- many-to-one collection at rank 0.
+  \item \texttt{MPI\_Bcast} - one-to-allcommunication used for broadcasting size of image and kernel weights.
+  \item \texttt{MPI\_Scatterv} - variable-length row chunks (handles $H \bmod P \neq 0$ via \texttt{counts}/\texttt{displs} arrays).
+  \item \texttt{MPI\_Barrier} - synchronizes all ranks before timing stops.
+  \item \texttt{MPI\_Gatherv} - many-to-one operation for collecting output values at rank 0.
 \end{itemize}
 
 % ─────────────────────────────────────────────────────────────────────────────
 \subsection{CUDA --- GPU Massive Parallelism}
 
-CUDA maps one GPU thread to each output pixel via a 2D grid of
-$16\!\times\!16$ thread blocks, with two key memory optimisations:
+In CUDA, one GPU thread per output pixel is mapped using a two-dimensional grid of 16 × 16 thread blocks, where two important memory optimizations are employed:
 
 \begin{enumerate}
   \item \textbf{Constant memory} (\texttt{\_\_constant\_\_}): convolution
         weights are broadcast to all warp lanes in a single transaction.
-  \item \textbf{Shared memory tiling}: each block cooperatively loads a tile of
-        input pixels (including a halo of $\lfloor k/2\rfloor$ pixels per
-        side) into fast on-chip SRAM, reducing redundant global-memory accesses.
+  \item \textbf{Shared memory tiling}: each block cooperatively loads a tile of input pixels (including a halo of $\lfloor k/2\rfloor$ pixels per side) into fast on-chip SRAM, reducing redundant global-memory accesses.
 \end{enumerate}
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[font=\small,scale=0.82]
-  \draw[step=0.5,gray!35,thin] (0,0) grid (8,6);
-  \draw[thick] (0,0) rectangle (8,6);
-  \node[above] at (4,6.15) {\textbf{Input Image ($W\!\times\!H$)}};
+\begin{tikzpicture}[
+    font=\small,
+    scale=0.82,
+    >=Stealth
+]
+=
+\draw[step=0.5,gray!35,thin] (0,0) grid (8,6);
+\draw[thick] (0,0) rectangle (8,6);
 
-  \foreach \bx/\by/\col in {0/0/tileA,2/0/tileB,0/2/tileC,2/2/tileD} {
-    \fill[\col,opacity=0.65] (\bx,\by) rectangle (\bx+2,\by+2);
+\node[above,font=\Large\bfseries] at (4,6.2)
+{Input Image ($W \times H$)};
+
+\foreach \bx/\by in {0/0,2/0,0/2,2/2} {
+
+    \fill[white] (\bx,\by) rectangle (\bx+2,\by+2);
+
     \draw[thick] (\bx,\by) rectangle (\bx+2,\by+2);
-    \node[font=\tiny] at (\bx+1,\by+1) {Block};
-  }
-  \node at (6.8,3) {\footnotesize\ldots};
 
-  % Halo
-  \draw[red,thick,dashed] (1.75,1.75) rectangle (2.25,2.25);
-  \node[red,font=\tiny] at (2.9,2.0) {Halo pixels};
+    \node[font=\small] at (\bx+1,\by+1) {Block};
+}
 
-  % Thread block detail
-  \begin{scope}[xshift=9.2cm,yshift=0.9cm]
-    \draw[fill=tileA!50,thick] (0,0) rectangle (2.2,2.2);
-    \node[above,font=\scriptsize] at (1.1,2.25)
-      {Block$(0,0)$ --- $16\!\times\!16$ threads};
-    \foreach \tx in {0,0.5,1,1.5} \foreach \ty in {0,0.5,1,1.5}
-      \draw[fill=tileA!85] (\tx+0.05,\ty+0.05) rectangle (\tx+0.45,\ty+0.45);
+\node at (6.8,3) {\Large $\cdots$};
 
-    \node[draw,fill=yellow!40,minimum width=2.2cm,minimum height=0.6cm,
-          align=center,font=\scriptsize] at (1.1,-0.75)
-      {Shared Memory Tile\\(with halo)};
-    \draw[-{Stealth}] (1.1,0) -- (1.1,-0.48);
+\draw[red,dashed,thick]
+(1.75,1.75) rectangle (2.25,2.25);
 
-    \node[draw,fill=orange!40,minimum width=2.2cm,minimum height=0.55cm,
-          align=center,font=\scriptsize] at (1.1,-2.0)
-      {\texttt{\_\_constant\_\_}\\kernel weights};
-    \draw[-{Stealth}] (1.1,-1.08) -- (1.1,-1.72);
-  \end{scope}
-  \draw[-{Stealth},thick] (8.05,3) -- (9.1,2.6);
+\node[red,font=\scriptsize,right]
+at (2.35,1.85) {Halo pixels};
+
+% =========================================================
+% Arrow from image to thread block
+% =========================================================
+\draw[->,thick]
+(8.05,3) -- (9.0,3);
+
+% =========================================================
+% CUDA thread block
+% =========================================================
+\begin{scope}[xshift=9.6cm,yshift=0.9cm]
+
+    % Outer frame
+    \draw[thick] (0,0) rectangle (2.75,2.75);
+
+    % Title
+    \node[above,font=\normalsize]
+    at (1.8,2.95)
+    {Block$(0,0)$ --- $16 \times 16$ threads};
+
+    % -----------------------------------------------------
+    % Centered 4x4 thread cells
+    % -----------------------------------------------------
+    \foreach \x in {0,0.5,1,1.5} {
+        \foreach \y in {0,0.5,1,1.5} {
+
+            \draw[fill=white]
+            (\x+0.45,\y+0.45)
+            rectangle
+            (\x+0.85,\y+0.85);
+
+        }
+    }
+
+    % =====================================================
+    % Shared memory tile
+    % =====================================================
+    \node[
+        draw,
+        minimum width=3.0cm,
+        minimum height=0.9cm,
+        align=center,
+        font=\small
+    ] (shared) at (1.4,-1.0)
+    {Shared Memory Tile\\(with halo)};
+
+    % Proper arrow
+    \draw[->,thick]
+    (1.4,0) -- (shared.north);
+
+    % =====================================================
+    % Constant memory
+    % =====================================================
+    \node[
+        draw,
+        minimum width=2.8cm,
+        minimum height=0.9cm,
+        align=center,
+        font=\small
+    ] (const) at (1.4,-2.8)
+    {\texttt{constant}\\kernel weights};
+
+    % Proper arrow
+    \draw[->,thick]
+    (shared.south) -- (const.north);
+
+\end{scope}
+
 \end{tikzpicture}
-\caption{CUDA thread hierarchy. Each $16\!\times\!16$ block loads a shared
-         memory tile including halo pixels before computing its output pixels.}
+
+\caption{
+CUDA thread hierarchy. Each $16 \times 16$ block loads a shared memory
+tile including halo pixels before computing its output pixels
+}
+
 \label{fig:cuda}
 \end{figure}
 
@@ -436,114 +389,42 @@ $16\!\times\!16$ thread blocks, with two key memory optimisations:
 \begin{enumerate}
   \item Copy kernel to \texttt{\_\_constant\_\_} memory
         (\texttt{cudaMemcpyToSymbol}).
-  \item Allocate device buffers; copy input image host$\to$device.
+  \item Allocate device buffers; copy input image from host to device.
   \item Launch \texttt{convolution\_shared<<<grid, block, smem>>>}:
         (a) cooperative tile load, (b) \texttt{\_\_syncthreads()},
         (c) per-thread pixel computation.
-  \item Copy result device$\to$host; free device memory.
-  \item Timing via \texttt{cudaEventRecord} / \texttt{cudaEventElapsedTime}.
+  \item Copy result from device to host; free device memory.
+  \item Timing using \texttt{cudaEventRecord} / \texttt{cudaEventElapsedTime}.
 \end{enumerate}
 
 % ─────────────────────────────────────────────────────────────────────────────
 \subsection{Hybrid MPI + OpenMP --- Two-Level Parallelism}
 \label{sec:hybrid}
 
-A hybrid approach combines distributed-memory \textbf{MPI} (inter-node) with
-shared-memory \textbf{OpenMP} (intra-node). This is the most scalable strategy
-for multi-node HPC clusters: MPI minimises cross-node data transfer while
-OpenMP threads exploit all cores within each node without incurring MPI
+The hybrid approach uses distributed-memory \textbf{MPI} for inter-node communication and shared-memory \textbf{OpenMP} for intra-node communication. This is the most scalable strategy
+for multi-node HPC clusters because MPI minimizes cross-node data transfer and OpenMP threads exploit all cores within each node without incurring MPI
 communication overhead per core.
 
 \subsubsection*{Design}
 
 \begin{enumerate}
-  \item Rank 0 broadcasts image dimensions and kernel (same as pure MPI).
+  \item Initially, rank 0 broadcasts the image dimensions and kernel (same as pure MPI implementation).
   \item \texttt{MPI\_Scatterv} distributes row chunks to each MPI process.
-  \item \emph{Within each process}, an OpenMP parallel loop processes the local
-        rows using all available threads.
-  \item \texttt{MPI\_Gatherv} collects results at rank 0.
+  \item Within each process, an OpenMP parallel loop processes the local rows using all available threads.
+  \item \texttt{MPI\_Gatherv} gathers results at rank 0.
 \end{enumerate}
-
-\begin{lstlisting}[language=C, caption={Hybrid MPI+OpenMP convolution kernel}]
-// After MPI_Scatterv fills local_input into local_img ...
-
-int omp_threads = atoi(getenv("OMP_NUM_THREADS") ? : "1");
-omp_set_num_threads(omp_threads);
-
-MPI_Barrier(MPI_COMM_WORLD);
-double start = MPI_Wtime();
-
-#pragma omp parallel for schedule(dynamic) \
-    shared(local_img, local_output, kernel, kernel_size, width, channels)
-for (int y = 0; y < local_rows; y++) {
-    for (int x = 0; x < width; x++) {
-        for (int c = 0; c < channels; c++) {
-            int index = (y * width + x) * channels + c;
-            local_output[index] =
-                apply_kernel(&local_img, x, y, c, kernel, kernel_size);
-        }
-    }
-}
-
-MPI_Barrier(MPI_COMM_WORLD);
-double end = MPI_Wtime();
-// Then MPI_Gatherv as before
-\end{lstlisting}
 
 \subsubsection*{Two-Level Parallelism Diagram}
 
 \begin{figure}[H]
-\centering
-\begin{tikzpicture}[font=\small, node distance=0.5cm]
-
-  %% ─── Level 1: MPI Processes ───────────────────────────────────────────────
-  \node[font=\bfseries] at (0, 6.0) {Level 1: MPI (distributed-memory)};
-
-  \foreach \p/\xp/\col in {0/-4.8/tileA, 1/-1.6/tileB, 2/1.6/tileC, 3/4.8/tileD} {
-    \node[draw, fill=\col, rounded corners, minimum width=2.8cm,
-          minimum height=0.7cm, align=center] (proc\p) at (\xp, 5.0)
-      {MPI Rank \p};
-  }
-  \node[draw, fill=hybridcol!15, minimum width=10.5cm, minimum height=0.4cm,
-        align=center, font=\tiny] (bcast) at (0, 4.1)
-    {\texttt{MPI\_Bcast} (kernel) \quad \texttt{MPI\_Scatterv} (row chunks)};
-  \foreach \p in {0,...,3} \draw[-{Stealth}] (proc\p.south) -- (bcast.north);
-
-  %% ─── Level 2: OpenMP Threads ──────────────────────────────────────────────
-  \node[font=\bfseries] at (0, 3.3) {Level 2: OpenMP (shared-memory within each rank)};
-
-  \foreach \p/\xp/\col in {0/-4.8/tileA, 1/-1.6/tileB, 2/1.6/tileC, 3/4.8/tileD} {
-    % Thread pool per process
-    \foreach \t/\dy in {0/0.0, 1/0.6} {
-      \node[draw, fill=\col!60, minimum width=1.2cm, minimum height=0.5cm,
-            align=center, font=\tiny] at (\xp + \t*1.35 - 0.68, 2.3-\dy)
-        {T\t};
-    }
-    \draw[decorate, decoration={brace,amplitude=4pt},
-          hybridcol!60, thick]
-      (\xp-1.3, 1.55) -- (\xp+1.3, 1.55)
-      node[midway, below=5pt, font=\tiny, hybridcol]{\emph{T} OMP threads};
-  }
-
-  %% ─── Gather ───────────────────────────────────────────────────────────────
-  \node[draw, fill=hybridcol!20, minimum width=10.5cm, minimum height=0.4cm,
-        align=center, font=\tiny] (gather) at (0, 0.6)
-    {\texttt{MPI\_Gatherv} (collect processed chunks at rank 0)};
-
-  \draw[-{Stealth}] (bcast.south) -- ++(0,-0.25)
-    node[below, font=\tiny]{each rank's local rows};
-
-  \foreach \p/\xp in {0/-4.8, 1/-1.6, 2/1.6, 3/4.8}
-    \draw[-{Stealth}] (\xp, 1.4) -- (gather.north);
-
-  \node[below=0.2cm of gather, font=\small] {Rank 0 saves final image};
-\end{tikzpicture}
-\caption{Hybrid MPI+OpenMP two-level parallelism. Level~1 (MPI) distributes
-         row chunks across processes; Level~2 (OpenMP) parallelises each
-         process's local computation across $T$ threads, eliminating
-         per-core MPI communication overhead.}
-\label{fig:hybrid}
+    \centering
+    \includegraphics[width=0.8\linewidth]{images/hybrid.png}
+    \caption{Hybrid MPI+OpenMP two-level parallelism. Level 1 (MPI) distributes row
+chunks across processes; Level 2 (OpenMP) parallelises each process’s local computation
+across T threads, eliminating per-core MPI communication overhead}
+    \label{fig:result}
 \end{figure}
+
 
 \subsubsection*{Trade-offs vs.\ Pure Approaches}
 
@@ -585,6 +466,8 @@ Scalability   & SMP cores & SMP cores & Nodes & SMs/VRAM & Nodes$\times$cores \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+% ═══════════════════════════════════════════════════════════════════════════════
 
 % ═══════════════════════════════════════════════════════════════════════════════
 \section{Accuracy Analysis}

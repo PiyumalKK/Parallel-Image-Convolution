@@ -62,6 +62,8 @@ Image* convolve_openmp(Image *input, float *kernel, int kernel_size) {
     );
     // Parallelize the outer two loops across all available threads
     // Using explicit shared/private clauses as per LLNL OpenMP tutorial best practices
+
+
     #pragma omp parallel for collapse(2) schedule(dynamic) \
         shared(input, output, kernel, kernel_size)
     for (int y = 0; y < input->height; y++) {
@@ -72,6 +74,7 @@ Image* convolve_openmp(Image *input, float *kernel, int kernel_size) {
             }
         }
     }
+    
     return output;
 }
 
