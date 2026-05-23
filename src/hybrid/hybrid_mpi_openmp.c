@@ -1,4 +1,4 @@
-// hybrid_mpi_openmp.c  — corrected version
+// hybrid_mpi_openmp.c — fully corrected version
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,6 +12,10 @@
 
 // ─── Kernel generators ────────────────────────────────────────────────────────
 
+/*
+ * Generate a normalized Gaussian kernel.
+ * All weights sum to 1.0 — essential for correct blur output.
+ */
 float* generate_gaussian_kernel(int size, float sigma) {
     float *kernel = (float*)malloc(size * size * sizeof(float));
     if (!kernel) return NULL;
@@ -29,8 +33,8 @@ float* generate_gaussian_kernel(int size, float sigma) {
 }
 
 /*
- * FIX #2: Helper to compute correct kernel size from sigma using the 6σ rule.
- * For σ=2 this gives 13; ensures Gaussian tails are not truncated.
+ * Compute correct kernel size for sigma using the 6sigma rule.
+ * Returns smallest odd integer >= 6*sigma + 1.
  */
 int gaussian_kernel_size(float sigma) {
     int size = (int)ceilf(6.0f * sigma) + 1;
@@ -39,10 +43,10 @@ int gaussian_kernel_size(float sigma) {
     return size;
 }
 
-float edge_kernel[9]    = { -1,-1,-1, -1,8,-1, -1,-1,-1 };
-float sharpen_kernel[9] = {  0,-1, 0, -1,5,-1,  0,-1, 0 };
+float edge_kernel[9]    = { 0,-1,0, -1,4,-1, 0,-1,0 };   // softer Laplacian
+float sharpen_kernel[9] = { 0,-1,0, -1,5,-1, 0,-1,0 };
 
-// ─── Single pixel convolution (thread-safe, reads only) ──────────────────────
+// ─── Single pixel convolution (thread-safe) ───────────────────────────────────
 
 unsigned char apply_kernel_local(
     unsigned char *data, int width, int height, int channels,
@@ -101,11 +105,12 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "ERROR: Failed to load image: %s\n", argv[1]);
             MPI_Abort(MPI_COMM_WORLD, 1);
         }
-        width      = img->width;
-        height     = img->height;
-        channels   = img->channels;
+        width    = img->width;
+        height   = img->height;
+        channels = img->channels;
+        printf("Image loaded: %dx%d, %d channels\n", width, height, channels);
 
-        // FIX #1: Detach data before freeing struct to avoid dangling pointer
+        // FIX #1: Detach data pointer before freeing struct
         full_image = img->data;
         img->data  = NULL;
         free(img);
@@ -122,14 +127,16 @@ int main(int argc, char *argv[]) {
     int    is_blur = 0;
 
     if (strcmp(argv[3], "blur") == 0) {
-        // FIX #2: Use sigma=2 and derive correct kernel size from 6σ rule
-        float sigma = 2.0f;
-        ksize  = gaussian_kernel_size(sigma);   // = 13 for sigma=2
+        // FIX #2: sigma=5.0 gives strong visible blur; kernel size from 6sigma rule = 31
+        float sigma = 5.0f;
+        ksize  = gaussian_kernel_size(sigma);   // = 31 for sigma=5
         kernel = generate_gaussian_kernel(ksize, sigma);
         if (!kernel) {
-            fprintf(stderr, "ERROR: Failed to generate Gaussian kernel\n");
+            fprintf(stderr, "ERROR: Rank %d failed to generate Gaussian kernel\n", rank);
             MPI_Abort(MPI_COMM_WORLD, 1);
         }
+        if (rank == 0)
+            printf("Blur: sigma=%.1f, kernel_size=%dx%d\n", sigma, ksize, ksize);
         is_blur = 1;
 
     } else if (strcmp(argv[3], "edge") == 0) {
@@ -140,7 +147,8 @@ int main(int argc, char *argv[]) {
         ksize  = 3;
     }
 
-    // ── 4. Start total wall-clock timer (FIX #5: use MPI_Wtime for full pipeline)
+    // ── 4. Start full pipeline timer ─────────────────────────────────────────
+    // FIX #5: Use MPI_Wtime for accurate cross-rank timing
     double total_start = MPI_Wtime();
 
     // ── 5. Calculate row distribution across ranks ────────────────────────────
@@ -195,20 +203,18 @@ int main(int argc, char *argv[]) {
     memcpy(halo_buffer + top_halo * width * channels,
            local_chunk, local_rows * width * channels);
 
-    // FIX #3: Use consistent matching tags for halo exchange
-    // Tag 10 = top halo exchange, Tag 20 = bottom halo exchange
-
-    // Send our top rows to rank-1; receive rank-1's bottom rows as our top halo
+    // FIX #3: Consistent matching tags — Tag 10 = upward, Tag 20 = downward
+    // Send our top rows up to rank-1; receive rank-1's bottom rows as our top halo
     if (rank > 0) {
         MPI_Sendrecv(
-            local_chunk,                              // send our top rows up
+            local_chunk,                               // send our top rows to rank-1
             half_k * width * channels, MPI_UNSIGNED_CHAR, rank-1, 10,
-            halo_buffer,                              // receive top halo
+            halo_buffer,                               // receive top halo from rank-1
             half_k * width * channels, MPI_UNSIGNED_CHAR, rank-1, 20,
             MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
-    // Send our bottom rows to rank+1; receive rank+1's top rows as our bottom halo
+    // Send our bottom rows down to rank+1; receive rank+1's top rows as our bottom halo
     if (rank < size - 1) {
         unsigned char *my_bottom   = local_chunk +
             (local_rows - half_k) * width * channels;
@@ -216,14 +222,14 @@ int main(int argc, char *argv[]) {
             (top_halo + local_rows) * width * channels;
 
         MPI_Sendrecv(
-            my_bottom,                                // send our bottom rows down
+            my_bottom,                                 // send our bottom rows to rank+1
             half_k * width * channels, MPI_UNSIGNED_CHAR, rank+1, 20,
-            recv_bottom,                              // receive bottom halo
+            recv_bottom,                               // receive bottom halo from rank+1
             half_k * width * channels, MPI_UNSIGNED_CHAR, rank+1, 10,
             MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
-    // ── 9. OpenMP parallel convolution on local chunk ─────────────────────────
+    // ── 9. OpenMP parallel convolution ────────────────────────────────────────
     unsigned char *local_output = (unsigned char*)malloc(
         local_rows * width * channels);
     if (!local_output) {
@@ -238,6 +244,7 @@ int main(int argc, char *argv[]) {
         for (int x = 0; x < width; x++) {
             for (int c = 0; c < channels; c++) {
                 int out_idx = (y * width + x) * channels + c;
+                // y offset by top_halo to index correctly into halo_buffer
                 local_output[out_idx] = apply_kernel_local(
                     halo_buffer,
                     width, halo_rows, channels,
@@ -270,22 +277,23 @@ int main(int argc, char *argv[]) {
         out_img.channels = channels;
         out_img.data     = output_image;
 
-        // FIX #6: save_image returns void; just call it directly
+        // FIX #6: save_image returns void — call directly
         save_image(argv[2], &out_img);
+        printf("Output saved to: %s\n", argv[2]);
 
         free(output_image);
         free(full_image);
 
-        printf("Hybrid MPI+OpenMP convolution complete.\n");
-        printf("  Filter       : %s\n",   argv[3]);
-        printf("  Kernel size  : %dx%d\n", ksize, ksize);
-        printf("  MPI ranks    : %d\n",   size);
-        printf("  OMP threads  : %d per rank\n", NUM_THREADS);
-        printf("  Total threads: %d\n",   size * NUM_THREADS);
+        printf("\nHybrid MPI+OpenMP convolution complete.\n");
+        printf("  Filter         : %s\n",     argv[3]);
+        printf("  Kernel size    : %dx%d\n",  ksize, ksize);
+        printf("  MPI ranks      : %d\n",     size);
+        printf("  OMP threads    : %d per rank\n", NUM_THREADS);
+        printf("  Total threads  : %d\n",     size * NUM_THREADS);
         printf("  Total wall time: %.4f seconds\n", total_end - total_start);
     }
 
-    // Each rank prints its own OpenMP compute time
+    // Each rank prints its own compute time
     printf("  Rank %d OMP compute time: %.4f seconds\n",
            rank, omp_end - omp_start);
 
