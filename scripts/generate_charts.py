@@ -90,96 +90,69 @@ def _save(fig, name):
     print(f"  wrote {path.relative_to(ROOT)}")
 
 
-# ─── Grouped-bar execution time chart ────────────────────────────────────────
+# ─── Line chart: execution time ──────────────────────────────────────────────
 def chart_time_bars(filter_name: str, times: dict, cuda_t: float,
                     kernel_str: str, image_str: str, fname: str,
                     hybrid_best: float | None = None):
     impls    = ["OpenMP", "POSIX", "MPI"]
     impl_col = [COL["openmp"], COL["posix"], COL["mpi"]]
+    markers  = ["o", "s", "^"]
     serial   = times["Serial"][0]
 
-    x = np.arange(len(WORKERS))
-    w = 0.26
-    fig, ax = plt.subplots(figsize=(10.5, 5.8))
+    fig, ax = plt.subplots(figsize=(8, 5))
 
-    # Reference lines (each on its own y-value, no overlap with bars)
+    # Serial baseline
     ax.axhline(serial, color=COL["serial"], linestyle="--", linewidth=1.4,
-               label=f"Serial baseline ({serial:.3f} s)")
-    ax.axhline(cuda_t, color=COL["cuda"], linestyle=":", linewidth=1.6,
-               label=f"CUDA ({cuda_t:.4f} s)")
-    if hybrid_best is not None:
-        ax.axhline(hybrid_best, color=COL["hybrid"], linestyle="-.",
-                   linewidth=1.6, label=f"Hybrid best ({hybrid_best:.3f} s)")
+               label=f"Serial ({serial:.2f} s)")
 
-    # Grouped bars: one cluster per worker count, one bar per implementation
-    for i, (impl, c) in enumerate(zip(impls, impl_col)):
+    # Lines for each implementation
+    for impl, c, m in zip(impls, impl_col, markers):
         vals = times[impl]
-        offsets = x + (i - 1) * w
-        bars = ax.bar(offsets, vals, w, color=c, label=impl,
-                      edgecolor="black", linewidth=0.5)
-        for b, v in zip(bars, vals):
-            txt = f"{v:.3f}" if v < 1 else f"{v:.2f}"
-            ax.annotate(txt,
-                        xy=(b.get_x() + b.get_width() / 2, v),
-                        xytext=(0, 3), textcoords="offset points",
-                        ha="center", fontsize=8.5)
+        ax.plot(WORKERS, vals, color=c, marker=m, linewidth=2, markersize=7, label=impl)
 
-    ax.set_yscale("log")
-    ax.set_xticks(x)
-    ax.set_xticklabels([f"{n} worker{'s' if n > 1 else ''}" for n in WORKERS])
-    ax.set_xlabel("Number of CPU workers (threads / processes)")
-    ax.set_ylabel("Execution time (seconds, log scale)")
-    ax.set_title(f"{filter_name} ({kernel_str}) on {image_str} — execution time")
-    ax.legend(loc="upper right", fontsize=9, ncol=2)
-    ax.grid(True, which="both", axis="y", linestyle="--", alpha=0.4)
-
-    top = max(max(times[i]) for i in impls) * 3.5
-    bottom = min(cuda_t, hybrid_best or cuda_t) * 0.4
-    ax.set_ylim(bottom, top)
+    ax.set_xlabel("Number of Workers")
+    ax.set_ylabel("Execution Time (s)")
+    ax.set_title(f"{filter_name} ({kernel_str}) on {image_str} — Execution Time")
+    ax.set_xticks(WORKERS)
+    ax.legend(loc="upper right", fontsize=9)
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
 
     _save(fig, fname)
 
 
-# ─── Grouped-bar speedup chart ───────────────────────────────────────────────
+# ─── Line chart: speedup ─────────────────────────────────────────────────────
 def chart_speedup_bars(filter_name: str, times: dict, cuda_t: float,
                        fname: str, hybrid_best: float | None = None):
     impls    = ["OpenMP", "POSIX", "MPI"]
     impl_col = [COL["openmp"], COL["posix"], COL["mpi"]]
+    markers  = ["o", "s", "^"]
     serial   = times["Serial"][0]
 
     sp = {impl: [serial / t for t in times[impl]] for impl in impls}
 
-    x = np.arange(len(WORKERS))
-    w = 0.26
-    fig, ax = plt.subplots(figsize=(10.5, 5.8))
+    fig, ax = plt.subplots(figsize=(8, 5))
 
-    # Ideal-linear reference: faint wide bar behind each group
-    ax.bar(x, WORKERS, width=0.86, color="#E8E8E8", edgecolor="#BBBBBB",
-           label="Ideal linear ($S = p$)", zorder=0)
+    # Ideal linear reference
+    ax.plot(WORKERS, WORKERS, color="gray", linestyle=":", linewidth=1.5, label="Ideal linear")
 
-    for i, (impl, c) in enumerate(zip(impls, impl_col)):
-        vals = sp[impl]
-        offsets = x + (i - 1) * w
-        bars = ax.bar(offsets, vals, w, color=c, label=impl,
-                      edgecolor="black", linewidth=0.5, zorder=3)
-        for b, v in zip(bars, vals):
-            ax.annotate(f"{v:.2f}×",
-                        xy=(b.get_x() + b.get_width() / 2, v),
-                        xytext=(0, 3), textcoords="offset points",
-                        ha="center", fontsize=8.5)
+    # Lines for each implementation
+    for impl, c, m in zip(impls, impl_col, markers):
+        ax.plot(WORKERS, sp[impl], color=c, marker=m, linewidth=2, markersize=7, label=impl)
 
     cuda_sp = serial / cuda_t
-    extra = f"CUDA ≈ {cuda_sp:.0f}× (off-chart)"
+    extra = f"(CUDA ≈ {cuda_sp:.0f}×"
     if hybrid_best is not None:
-        extra += f"   ·   Hybrid best ≈ {serial / hybrid_best:.1f}×"
+        extra += f", Hybrid ≈ {serial / hybrid_best:.1f}×"
+    extra += ")"
 
-    ax.set_xticks(x)
-    ax.set_xticklabels([f"{n} worker{'s' if n > 1 else ''}" for n in WORKERS])
-    ax.set_xlabel("Number of parallel workers $p$")
-    ax.set_ylabel(r"Speedup $S(p) = T_1 / T_p$")
-    ax.set_title(f"Speedup — {filter_name}\n{extra}", fontsize=12)
-    ax.set_ylim(0, max(8, max(max(sp[i]) for i in impls)) * 1.15)
-    ax.legend(loc="upper left", fontsize=9, ncol=2)
+    ax.set_xlabel("Number of Workers")
+    ax.set_ylabel("Speedup (×)")
+    ax.set_title(f"{filter_name} — Speedup {extra}")
+    ax.set_xticks(WORKERS)
+    ax.legend(loc="upper left", fontsize=9)
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
 
     _save(fig, fname)
 
@@ -220,8 +193,8 @@ def chart_rmse():
 def chart_hybrid():
     labels = ["Pure OMP-4", "Hyb 1×4", "Hyb 2×2", "Hyb 4×1",
               "Hyb 1×8", "Hyb 2×4", "Hyb 4×2", "Pure MPI-8"]
-    vals = [20.61, HYBRID_BLUR["1x4"], HYBRID_BLUR["2x2"], HYBRID_BLUR["4x1"],
-            HYBRID_BLUR["1x8"], HYBRID_BLUR["2x4"], HYBRID_BLUR["4x2"], 20.50]
+    vals = [19.96, HYBRID_BLUR["1x4"], HYBRID_BLUR["2x2"], HYBRID_BLUR["4x1"],
+            HYBRID_BLUR["1x8"], HYBRID_BLUR["2x4"], HYBRID_BLUR["4x2"], 20.16]
     colours = [COL["openmp"]] + [COL["hybrid"]] * 6 + [COL["mpi"]]
 
     fig, ax = plt.subplots(figsize=(10, 5.4))
@@ -245,7 +218,7 @@ def chart_hybrid():
 def chart_cuda():
     filters  = ["Gaussian Blur\n(21×21, 4K)", "Edge Detection\n(3×3, 4K)",
                 "Sharpen\n(3×3, 1.2K)"]
-    serial_t = [81.43, 2.123, 0.263]
+    serial_t = [79.78, 2.169, 0.258]
     cuda_t   = [CUDA_BLUR, CUDA_EDGE, CUDA_SHARPEN]
     speedup  = [s / c for s, c in zip(serial_t, cuda_t)]
 

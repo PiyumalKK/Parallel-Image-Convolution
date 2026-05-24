@@ -86,11 +86,11 @@ export default function CUDAAnimation() {
             </div>
             <div className="bg-gray-800/40 rounded-lg p-3 text-center">
               <p className="text-[10px] text-gray-500 uppercase">Speedup</p>
-              <p className="text-lg font-bold text-emerald-400">1054×</p>
+              <p className="text-lg font-bold text-emerald-400">1555×</p>
             </div>
             <div className="bg-gray-800/40 rounded-lg p-3 text-center">
               <p className="text-[10px] text-gray-500 uppercase">Time</p>
-              <p className="text-lg font-bold text-emerald-400">0.077s</p>
+              <p className="text-lg font-bold text-emerald-400">0.051s</p>
             </div>
           </div>
         </motion.div>

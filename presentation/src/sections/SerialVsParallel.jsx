@@ -85,7 +85,7 @@ export default function SerialVsParallel() {
             <p className="text-gray-500 text-sm mt-4 font-mono">
               1 thread → processes row by row sequentially
             </p>
-            <p className="text-red-300 text-lg font-bold mt-2">81.43 seconds</p>
+            <p className="text-red-300 text-lg font-bold mt-2">79.78 seconds</p>
           </motion.div>
 
           {/* Parallel */}
@@ -134,7 +134,7 @@ export default function SerialVsParallel() {
             <p className="text-gray-500 text-sm mt-4 font-mono">
               4 threads → each processes ¼ of rows simultaneously
             </p>
-            <p className="text-green-300 text-lg font-bold mt-2">~20.16 seconds (4× faster)</p>
+            <p className="text-green-300 text-lg font-bold mt-2">~19.96 seconds (4× faster)</p>
           </motion.div>
         </div>
 

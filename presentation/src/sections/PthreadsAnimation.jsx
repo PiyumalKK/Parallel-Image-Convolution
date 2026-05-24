@@ -81,11 +81,11 @@ export default function PthreadsAnimation() {
             </div>
             <div className="bg-gray-800/40 rounded-lg p-3 text-center">
               <p className="text-[10px] text-gray-500 uppercase">Speedup</p>
-              <p className="text-lg font-bold text-green-400">4.04×</p>
+              <p className="text-lg font-bold text-green-400">3.86×</p>
             </div>
             <div className="bg-gray-800/40 rounded-lg p-3 text-center">
               <p className="text-[10px] text-gray-500 uppercase">Time</p>
-              <p className="text-lg font-bold text-green-400">20.16s</p>
+              <p className="text-lg font-bold text-green-400">20.65s</p>
             </div>
           </div>
         </motion.div>

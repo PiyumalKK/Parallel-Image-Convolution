@@ -44,8 +44,8 @@ const implementations = [
       'Dynamic scheduling for load balance',
       'No mutex needed (unique output indices)',
     ],
-    speedup: '3.95×',
-    time: '20.61s',
+    speedup: '4.00×',
+    time: '19.96s',
   },
   {
     id: 'posix',
@@ -59,8 +59,8 @@ const implementations = [
       'ThreadArgs struct passes row ranges',
       'pthread_join() synchronizes at end',
     ],
-    speedup: '4.04×',
-    time: '20.16s',
+    speedup: '3.86×',
+    time: '20.65s',
   },
   {
     id: 'mpi',
@@ -74,8 +74,8 @@ const implementations = [
       'Each rank computes independently',
       'MPI_Gatherv → collect results at rank 0',
     ],
-    speedup: '4.02×',
-    time: '20.24s',
+    speedup: '3.82×',
+    time: '20.86s',
   },
   {
     id: 'cuda',
@@ -89,8 +89,8 @@ const implementations = [
       '__constant__ memory for kernel weights',
       '__syncthreads() for tile synchronization',
     ],
-    speedup: '1054×',
-    time: '0.077s',
+    speedup: '1555×',
+    time: '0.051s',
   },
   {
     id: 'hybrid',
@@ -101,11 +101,11 @@ const implementations = [
     details: [
       'Level 1: MPI scatters row chunks across ranks',
       'Level 2: OpenMP threads within each rank',
-      'Best config: 4 ranks × 2 threads = 8 workers',
+      'Best config: 2 ranks × 4 threads = 8 workers',
       'Optimized local convolution function',
     ],
-    speedup: '18.1×',
-    time: '4.49s',
+    speedup: '18.3×',
+    time: '4.37s',
   },
 ]
 

@@ -64,7 +64,7 @@ export default function SerialAnimation() {
             </div>
             <div className="bg-gray-800/40 rounded-lg p-3 text-center">
               <p className="text-[10px] text-gray-500 uppercase">Time</p>
-              <p className="text-lg font-bold text-orange-400">81.43s</p>
+              <p className="text-lg font-bold text-orange-400">79.78s</p>
             </div>
           </div>
         </motion.div>

@@ -189,9 +189,9 @@ export default function DemoSection() {
               <p className="text-xs text-gray-500 uppercase mb-3">Execution Time Comparison</p>
               <div className="space-y-3">
                 {[
-                  { name: 'Serial', time: '81.43s', width: '100%', color: '#6b7280' },
-                  { name: 'OpenMP', time: '20.61s', width: '25.3%', color: '#22c55e' },
-                  { name: 'CUDA', time: '0.077s', width: '0.1%', color: '#10b981' },
+                  { name: 'Serial', time: '79.78s', width: '100%', color: '#6b7280' },
+                  { name: 'OpenMP', time: '19.96s', width: '25.0%', color: '#22c55e' },
+                  { name: 'CUDA', time: '0.051s', width: '0.1%', color: '#10b981' },
                 ].map((item) => (
                   <div key={item.name} className="flex items-center gap-3">
                     <span className="text-xs text-gray-400 w-14">{item.name}</span>

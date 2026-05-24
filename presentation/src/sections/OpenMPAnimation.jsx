@@ -157,11 +157,11 @@ export default function OpenMPAnimation() {
             </div>
             <div className="bg-gray-800/40 rounded-lg p-3 text-center">
               <p className="text-[10px] text-gray-500 uppercase">Speedup</p>
-              <p className="text-lg font-bold text-blue-400">3.95×</p>
+              <p className="text-lg font-bold text-blue-400">4.00×</p>
             </div>
             <div className="bg-gray-800/40 rounded-lg p-3 text-center">
               <p className="text-[10px] text-gray-500 uppercase">Time</p>
-              <p className="text-lg font-bold text-blue-400">20.61s</p>
+              <p className="text-lg font-bold text-blue-400">19.96s</p>
             </div>
           </div>
         </motion.div>

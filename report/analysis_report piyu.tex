@@ -78,7 +78,7 @@
     {\Large \textbf{Performance Analysis of Parallel Image Convolution}}\\[0.3cm]
     {\large \textbf{using OpenMP, POSIX Threads, MPI and CUDA}}\\[1cm]
     
-    {\large \textbf{Group Number: 40}}\\[1cm]
+    {\large \textbf{Group Number: 42}}\\[1cm]
     
     \begin{tabular}{p{2.8cm} p{5cm}}
         EG/2021/4735 & Ranasingha K.K.M.P. \\[0.2cm]
@@ -560,13 +560,13 @@ Timing CUDA    & \texttt{cudaEventElapsedTime} (GPU wall clock) \\
 \toprule
 \textbf{Implementation} & \textbf{1} & \textbf{2} & \textbf{4} & \textbf{8} & \textbf{Speedup@4} \\
 \midrule
-Serial     & 81.43 & ---   & ---   & ---   & 1.00$\times$ \\
-OpenMP     & 81.19 & 40.46 & 20.61 & 20.58 & 3.95$\times$ \\
-POSIX      & 81.68 & 39.67 & 20.16 & 20.05 & 4.04$\times$ \\
-MPI        & 80.19 & 39.89 & 20.24 & 20.50 & 4.02$\times$ \\
-CUDA       & \multicolumn{4}{c}{0.0773 (Tesla T4, 16$\times$16 blocks)} & 1054$\times$ \\
-Hybrid 2$\times$4 & --- & --- & --- & 4.64  & 17.6$\times$ \\
-Hybrid 4$\times$2 & --- & --- & --- & 4.49  & 18.1$\times$ \\
+Serial     & 79.78 & ---   & ---   & ---   & 1.00$\times$ \\
+OpenMP     & 78.68 & 39.57 & 19.96 & 19.72 & 4.00$\times$ \\
+POSIX      & 78.44 & 39.80 & 20.65 & 20.53 & 3.86$\times$ \\
+MPI        & 80.81 & 40.39 & 20.86 & 20.16 & 3.82$\times$ \\
+CUDA       & \multicolumn{4}{c}{0.0513 (Tesla T4, 16$\times$16 blocks)} & 1555$\times$ \\
+Hybrid 2$\times$4 & --- & --- & --- & 4.37  & 18.3$\times$ \\
+Hybrid 4$\times$2 & --- & --- & --- & 4.38  & 18.2$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -611,7 +611,7 @@ law). With $S(4) = 4.0$ we estimate $f < 0.5\%$, implying a theoretical
 maximum of $>200\times$ with unlimited cores.
 
 The actual constraint on this system is \textbf{hardware parallelism} (4 cores),
-not sequential code. This is corroborated by CUDA with $1054\times$ speedup
+not sequential code. This is corroborated by CUDA with $1555\times$ speedup
 on the same workload using thousands of GPU threads.
 
 \subsection{Hybrid MPI+OpenMP Configurations}
@@ -629,16 +629,16 @@ Results of Gaussian blur for different splits, 4 and 8 workers.
 \textbf{Config} & \textbf{MPI procs} & \textbf{OMP threads} &
 \textbf{Total} & \textbf{Time (s)} & \textbf{Speedup vs.\ serial} \\
 \midrule
-Pure OMP-4  & 1 & 4 & 4 & 20.61 & 3.95$\times$ \\
-Hybrid 1$\times$4 & 1 & 4 & 4 & 4.63 & 17.6$\times$ \\
-Hybrid 2$\times$2 & 2 & 2 & 4 & 4.58 & 17.8$\times$ \\
-Hybrid 4$\times$1 & 4 & 1 & 4 & 4.78 & 17.0$\times$ \\
+Pure OMP-4  & 1 & 4 & 4 & 19.96 & 4.00$\times$ \\
+Hybrid 1$\times$4 & 1 & 4 & 4 & 4.37 & 18.3$\times$ \\
+Hybrid 2$\times$2 & 2 & 2 & 4 & 4.39 & 18.2$\times$ \\
+Hybrid 4$\times$1 & 4 & 1 & 4 & 4.37 & 18.3$\times$ \\
 \midrule
-Pure OMP-8  & 1 & 8 & 8 & 20.58 & 3.96$\times$ \\
-Hybrid 1$\times$8 & 1 & 8 & 8 & 4.78 & 17.0$\times$ \\
-Hybrid 2$\times$4 & 2 & 4 & 8 & 4.64 & 17.6$\times$ \\
-Hybrid 4$\times$2 & 4 & 2 & 8 & 4.49 & 18.1$\times$ \\
-Pure MPI-8  & 8 & 1 & 8 & 20.50 & 3.97$\times$ \\
+Pure OMP-8  & 1 & 8 & 8 & 19.72 & 4.05$\times$ \\
+Hybrid 1$\times$8 & 1 & 8 & 8 & 4.37 & 18.3$\times$ \\
+Hybrid 2$\times$4 & 2 & 4 & 8 & 4.37 & 18.3$\times$ \\
+Hybrid 4$\times$2 & 4 & 2 & 8 & 4.38 & 18.2$\times$ \\
+Pure MPI-8  & 8 & 1 & 8 & 20.16 & 3.96$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -670,9 +670,9 @@ This implementation is CUDA version that runs on $16\!\times\!16$ blocks on the 
 \toprule
 \textbf{Filter} & \textbf{Serial (s)} & \textbf{CUDA (s)} & \textbf{Speedup} \\
 \midrule
-Gaussian Blur ($21\!\times\!21$) & 81.43 & 0.0773 & 1054$\times$ \\
-Edge Detection ($3\!\times\!3$)  & 2.12  & 0.0121 & 175$\times$ \\
-Sharpen ($3\!\times\!3$)         & 0.26  & 0.0039 & 67$\times$ \\
+Gaussian Blur ($21\!\times\!21$) & 79.78 & 0.0513 & 1555$\times$ \\
+Edge Detection ($3\!\times\!3$)  & 2.17  & 0.0120 & 181$\times$ \\
+Sharpen ($3\!\times\!3$)         & 0.26  & 0.0045 & 57$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -751,40 +751,40 @@ Parallel efficiency measures how well each worker is utilised:
 \[
   E(p) = \frac{S(p)}{p} = \frac{T_{\text{serial}}}{p \cdot T_{\text{parallel}}(p)}
 \]
-Using $T_{\text{serial}} = 81.43$\,s from Table~\ref{tab:blur-timing}:
+Using $T_{\text{serial}} = 79.78$\,s from Table~\ref{tab:blur-timing}:
 
 \textbf{OpenMP:}
 \begin{align*}
-  p=1:&\quad S = 81.43/81.19 = 1.003,\quad E = 1.003/1 = 100.3\% \\
-  p=2:&\quad S = 81.43/40.46 = 2.013,\quad E = 2.013/2 = 100.6\% \\
-  p=4:&\quad S = 81.43/20.61 = 3.951,\quad E = 3.951/4 = 98.8\% \\
-  p=8:&\quad S = 81.43/20.58 = 3.957,\quad E = 3.957/8 = 49.5\%
+  p=1:&\quad S = 79.78/78.68 = 1.014,\quad E = 1.014/1 = 101.4\% \\
+  p=2:&\quad S = 79.78/39.57 = 2.016,\quad E = 2.016/2 = 100.8\% \\
+  p=4:&\quad S = 79.78/19.96 = 3.997,\quad E = 3.997/4 = 99.9\% \\
+  p=8:&\quad S = 79.78/19.72 = 4.045,\quad E = 4.045/8 = 50.6\%
 \end{align*}
 
 \textbf{POSIX:}
 \begin{align*}
-  p=1:&\quad S = 81.43/81.68 = 0.997,\quad E = 0.997/1 = 99.7\% \\
-  p=2:&\quad S = 81.43/39.67 = 2.053,\quad E = 2.053/2 = 102.7\% \\
-  p=4:&\quad S = 81.43/20.16 = 4.039,\quad E = 4.039/4 = 101.0\% \\
-  p=8:&\quad S = 81.43/20.05 = 4.062,\quad E = 4.062/8 = 50.8\%
+  p=1:&\quad S = 79.78/78.44 = 1.017,\quad E = 1.017/1 = 101.7\% \\
+  p=2:&\quad S = 79.78/39.80 = 2.005,\quad E = 2.005/2 = 100.3\% \\
+  p=4:&\quad S = 79.78/20.65 = 3.863,\quad E = 3.863/4 = 96.6\% \\
+  p=8:&\quad S = 79.78/20.53 = 3.885,\quad E = 3.885/8 = 48.6\%
 \end{align*}
 
 \textbf{MPI:}
 \begin{align*}
-  p=1:&\quad S = 81.43/80.19 = 1.015,\quad E = 1.015/1 = 101.6\% \\
-  p=2:&\quad S = 81.43/39.89 = 2.041,\quad E = 2.041/2 = 102.1\% \\
-  p=4:&\quad S = 81.43/20.24 = 4.023,\quad E = 4.023/4 = 100.6\% \\
-  p=8:&\quad S = 81.43/20.50 = 3.972,\quad E = 3.972/8 = 49.7\%
+  p=1:&\quad S = 79.78/80.81 = 0.987,\quad E = 0.987/1 = 98.7\% \\
+  p=2:&\quad S = 79.78/40.39 = 1.975,\quad E = 1.975/2 = 98.8\% \\
+  p=4:&\quad S = 79.78/20.86 = 3.824,\quad E = 3.824/4 = 95.6\% \\
+  p=8:&\quad S = 79.78/20.16 = 3.957,\quad E = 3.957/8 = 49.5\%
 \end{align*}
 
 \textbf{CUDA} (2560 cores):
 \[
-  S = 81.43/0.0773 = 1054,\quad E = 1054/2560 = 41.2\%
+  S = 79.78/0.0513 = 1555,\quad E = 1555/2560 = 60.7\%
 \]
 
-\textbf{Hybrid 4$\times$2} (8 workers):
+\textbf{Hybrid 2$\times$4} (8 workers):
 \[
-  S = 81.43/4.49 = 18.1,\quad E = 18.1/8 = 226\%\;\text{(super-linear)}
+  S = 79.78/4.37 = 18.3,\quad E = 18.3/8 = 228\%\;\text{(super-linear)}
 \]
 
 \begin{table}[H]
@@ -793,13 +793,13 @@ Using $T_{\text{serial}} = 81.43$\,s from Table~\ref{tab:blur-timing}:
 \label{tab:efficiency}
 \begin{tabular}{lccccc}
 \toprule
-\textbf{Workers} & \textbf{OpenMP} & \textbf{POSIX} & \textbf{MPI} & \textbf{CUDA} & \textbf{Hybrid 4$\times$2} \\
+\textbf{Workers} & \textbf{OpenMP} & \textbf{POSIX} & \textbf{MPI} & \textbf{CUDA} & \textbf{Hybrid 2$\times$4} \\
 \midrule
-1 & 100.3\% & 99.7\% & 101.6\% & --- & --- \\
-2 & 100.6\% & 102.7\% & 102.1\% & --- & --- \\
-4 & 98.8\%  & 101.0\% & 100.6\% & --- & --- \\
-8 & 49.5\%  & 50.8\%  & 49.7\% & --- & 226\% \\
-2560 & --- & --- & --- & 41.2\% & --- \\
+1 & 101.4\% & 101.7\% & 98.7\% & --- & --- \\
+2 & 100.8\% & 100.3\% & 98.8\% & --- & --- \\
+4 & 99.9\%  & 96.6\% & 95.6\% & --- & --- \\
+8 & 50.6\%  & 48.6\%  & 49.5\% & --- & 228\% \\
+2560 & --- & --- & --- & 60.7\% & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -819,21 +819,20 @@ and tested them for correctness (RMSE vs.\ serial), execution time, speedup,
 and efficiency on a 4-core Azure VM with an NVIDIA Tesla T4 GPU.
 
 \begin{enumerate}
-  \item OpenMP achieved speedup of $3.95\times$ at 4 threads.
-        Near perfect parallel efficiency; minimal code change
+  \item OpenMP achieved the best CPU speedup of $4.00\times$ at 4 threads
+        (and $4.05\times$ at 8 threads). Near perfect parallel efficiency; minimal code change
         for all cores available.
-  \item At 4 threads, \textbf{POSIX Pthreads} performed best with a $4.04\times$ factor.
-        Supersedes OpenMP with a bit more simplicity of static partitioning,
-        eliminating the dynamic scheduling overhead in OpenMP for this regular workload.
-  \item \textbf{MPI} achieved $4.02\times$ at 4 processes with identical
-        scaling to POSIX, but creates the boundary-seam artefact
+  \item \textbf{POSIX Pthreads} achieved $3.86\times$ at 4 threads.
+        Fine-grained control via static partitioning and explicit thread lifecycle management.
+  \item \textbf{MPI} achieved $3.82\times$ at 4 processes with comparable
+        scaling, but creates the boundary-seam artefact
         (RMSE up to 1.40 for sharpen) to be rectified by halo-exchange.
   \item The best absolute speedup was from \textbf{CUDA}
-        ($1054\times$ for blur, $175\times$ for edge) by exploiting 2560
+        ($1555\times$ for blur, $181\times$ for edge) by exploiting 2560
         GPU cores with shared-memory tiling and constant-memory kernel caching.
   \item \textbf{Hybrid MPI+OpenMP} brought about $\approx\!18\times$ speedup
-        ($4.49$\,s for blur) because of its optimized local convolution function.
-        The 4P$\times$2T configuration was slightly the quickest. On multi-node
+        ($4.37$\,s for blur) because of its optimized local convolution function.
+        The 2P$\times$4T configuration was slightly the quickest. On multi-node
         clusters this would scale further by distributing MPI ranks
         across nodes.
 \end{enumerate}

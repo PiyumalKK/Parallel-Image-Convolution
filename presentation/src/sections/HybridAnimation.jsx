@@ -129,11 +129,11 @@ export default function HybridAnimation() {
             </div>
             <div className="bg-gray-800/40 rounded-lg p-3 text-center">
               <p className="text-[10px] text-gray-500 uppercase">Speedup</p>
-              <p className="text-lg font-bold text-pink-400">18.1×</p>
+              <p className="text-lg font-bold text-pink-400">18.3×</p>
             </div>
             <div className="bg-gray-800/40 rounded-lg p-3 text-center">
               <p className="text-[10px] text-gray-500 uppercase">Time</p>
-              <p className="text-lg font-bold text-pink-400">4.49s</p>
+              <p className="text-lg font-bold text-pink-400">4.37s</p>
             </div>
           </div>
         </motion.div>

@@ -121,11 +121,11 @@ export default function MPIAnimation() {
             </div>
             <div className="bg-gray-800/40 rounded-lg p-3 text-center">
               <p className="text-[10px] text-gray-500 uppercase">Speedup</p>
-              <p className="text-lg font-bold text-cyan-400">4.02×</p>
+              <p className="text-lg font-bold text-cyan-400">3.82×</p>
             </div>
             <div className="bg-gray-800/40 rounded-lg p-3 text-center">
               <p className="text-[10px] text-gray-500 uppercase">Time</p>
-              <p className="text-lg font-bold text-cyan-400">20.24s</p>
+              <p className="text-lg font-bold text-cyan-400">20.86s</p>
             </div>
           </div>
         </motion.div>

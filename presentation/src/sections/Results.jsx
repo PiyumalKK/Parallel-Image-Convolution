@@ -114,9 +114,9 @@ export default function Results() {
         {/* Key metrics */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
           {[
-            { label: 'Best CPU Speedup', value: '4.04×', sub: 'POSIX @ 4 threads', color: 'text-orange-400' },
-            { label: 'CUDA Speedup', value: '1054×', sub: 'Tesla T4 GPU', color: 'text-red-400' },
-            { label: 'Hybrid Speedup', value: '18.1×', sub: '4P × 2T config', color: 'text-cyan-400' },
+            { label: 'Best CPU Speedup', value: '4.05×', sub: 'OpenMP @ 8 threads', color: 'text-orange-400' },
+            { label: 'CUDA Speedup', value: '1555×', sub: 'Tesla T4 GPU', color: 'text-red-400' },
+            { label: 'Hybrid Speedup', value: '18.3×', sub: '2P × 4T config', color: 'text-cyan-400' },
             { label: 'Max RMSE', value: '1.40', sub: 'MPI sharpen (seam)', color: 'text-purple-400' },
           ].map((metric) => (
             <motion.div

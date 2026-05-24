@@ -181,9 +181,9 @@ export default function ConvolutionDemo() {
               <p className="text-yellow-300 text-xs mt-1">= 8.3M pixels × 441 ops</p>
               <p className="text-red-300 text-xs">= 3.5 Billion operations</p>
               <hr className="border-gray-700 my-3" />
-              <p className="text-gray-400 text-xs">Serial: <span className="text-red-400">81.43 seconds</span></p>
-              <p className="text-gray-400 text-xs">CUDA: <span className="text-green-400">0.077 seconds</span></p>
-              <p className="text-green-300 text-xs font-bold mt-1">→ 1054× faster!</p>
+              <p className="text-gray-400 text-xs">Serial: <span className="text-red-400">79.78 seconds</span></p>
+              <p className="text-gray-400 text-xs">CUDA: <span className="text-green-400">0.051 seconds</span></p>
+              <p className="text-green-300 text-xs font-bold mt-1">→ 1555× faster!</p>
             </div>
           </motion.div>
         </div>
