@@ -61,7 +61,7 @@ export default function HybridAnimation() {
         setOmpProgress(Array.from({ length: RANKS }, () => Array.from({ length: OMP }, () => 0)))
         setGatherProgress(0)
       }
-    }, 150)
+    }, 300)
     return () => clearInterval(interval)
   }, [isInView])
 
@@ -143,7 +143,7 @@ export default function HybridAnimation() {
           className="flex flex-col items-center gap-4">
 
           {/* Source image representation */}
-          <div className="w-full max-w-[320px]">
+          <div className="w-full max-w-[420px]">
             <p className="text-[9px] text-gray-500 mb-1 text-center uppercase tracking-wider">Live Execution View</p>
 
             {/* The image split into rank chunks, each showing OMP thread sub-rows */}
@@ -172,8 +172,11 @@ export default function HybridAnimation() {
                       const filled = phase === 'compute' || phase === 'join' || phase === 'gather' || phase === 'done'
                         ? ompProgress[r][t] : 0
                       return (
-                        <div key={`omp-${r}-${t}`} className="flex-1 h-8 relative border-r last:border-r-0"
-                          style={{ borderColor: RANK_COLORS[r] + '15' }}>
+                        <div key={`omp-${r}-${t}`} className="flex-1 h-10 relative border-r last:border-r-0"
+                          style={{
+                            borderColor: RANK_COLORS[r] + '15',
+                            boxShadow: phase === 'compute' && filled > 0 && filled < 100 ? `inset 0 0 12px ${OMP_SHADES[r][t]}33` : 'none'
+                          }}>
                           {/* Thread fill */}
                           <div className="absolute inset-0 transition-all duration-300"
                             style={{
@@ -215,7 +218,7 @@ export default function HybridAnimation() {
           </div>
 
           {/* Communication status */}
-          <div className="w-full max-w-[320px] bg-gray-900/60 rounded-lg border border-gray-700/40 p-3">
+          <div className="w-full max-w-[420px] bg-gray-900/60 rounded-lg border border-gray-700/40 p-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[9px] uppercase text-gray-500">Communication</span>
               <span className="text-[9px] font-mono text-pink-400">
