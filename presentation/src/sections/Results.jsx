@@ -6,31 +6,31 @@ import {
 } from 'recharts'
 
 const timeData = [
-  { workers: 1, OpenMP: 81.19, POSIX: 81.68, MPI: 80.19 },
-  { workers: 2, OpenMP: 40.46, POSIX: 39.67, MPI: 39.89 },
-  { workers: 4, OpenMP: 20.61, POSIX: 20.16, MPI: 20.24 },
-  { workers: 8, OpenMP: 20.58, POSIX: 20.05, MPI: 20.50 },
+  { workers: 1, OpenMP: 78.68, POSIX: 78.44, MPI: 80.81 },
+  { workers: 2, OpenMP: 39.57, POSIX: 39.80, MPI: 40.39 },
+  { workers: 4, OpenMP: 19.96, POSIX: 20.65, MPI: 20.86 },
+  { workers: 8, OpenMP: 19.72, POSIX: 20.53, MPI: 20.16 },
 ]
 
 const speedupData = [
-  { workers: 1, OpenMP: 1.0, POSIX: 1.0, MPI: 1.02, Ideal: 1 },
-  { workers: 2, OpenMP: 2.01, POSIX: 2.05, MPI: 2.04, Ideal: 2 },
-  { workers: 4, OpenMP: 3.95, POSIX: 4.04, MPI: 4.02, Ideal: 4 },
-  { workers: 8, OpenMP: 3.96, POSIX: 4.06, MPI: 3.97, Ideal: 8 },
+  { workers: 1, OpenMP: 1.01, POSIX: 1.02, MPI: 0.99, Ideal: 1 },
+  { workers: 2, OpenMP: 2.02, POSIX: 2.01, MPI: 1.98, Ideal: 2 },
+  { workers: 4, OpenMP: 4.00, POSIX: 3.86, MPI: 3.82, Ideal: 4 },
+  { workers: 8, OpenMP: 4.05, POSIX: 3.88, MPI: 3.96, Ideal: 8 },
 ]
 
 const cudaComparison = [
-  { filter: 'Gaussian Blur', Serial: 81.43, CUDA: 0.0773, speedup: '1054×' },
-  { filter: 'Edge Detection', Serial: 2.12, CUDA: 0.0121, speedup: '175×' },
-  { filter: 'Sharpen', Serial: 0.26, CUDA: 0.0039, speedup: '67×' },
+  { filter: 'Gaussian Blur', Serial: 79.78, CUDA: 0.0513, speedup: '1555×' },
+  { filter: 'Edge Detection', Serial: 2.17, CUDA: 0.0120, speedup: '181×' },
+  { filter: 'Sharpen', Serial: 0.26, CUDA: 0.0045, speedup: '57×' },
 ]
 
 const efficiencyData = [
-  { impl: 'OpenMP\n(4 workers)', efficiency: 98.8 },
-  { impl: 'POSIX\n(4 workers)', efficiency: 101.0 },
-  { impl: 'MPI\n(4 workers)', efficiency: 100.6 },
-  { impl: 'CUDA\n(2560 cores)', efficiency: 41.2 },
-  { impl: 'Hybrid\n(8 workers)', efficiency: 226 },
+  { impl: 'OpenMP\n(4 workers)', efficiency: 99.9 },
+  { impl: 'POSIX\n(4 workers)', efficiency: 96.6 },
+  { impl: 'MPI\n(4 workers)', efficiency: 95.6 },
+  { impl: 'CUDA\n(2560 cores)', efficiency: 60.7 },
+  { impl: 'Hybrid\n(8 workers)', efficiency: 228 },
 ]
 
 const rmseData = [
