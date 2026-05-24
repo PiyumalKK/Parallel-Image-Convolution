@@ -125,3 +125,56 @@ Run:
 ./convolution_cuda images/input/test.jpg images/output/blur_cuda.jpg blur
 ./convolution_cuda images/input/test_edge.jpg images/output/edge_cuda.jpg edge
 ./convolution_cuda images/input/test_sharp.jpg images/output/sharp_cuda.jpg sharpen
+
+========================================
+6. HYBRID MPI+OpenMP
+========================================
+
+Compile:
+mpicc -fopenmp -o convolution_hybrid src/hybrid/hybrid_mpi_openmp.c src/image_utils.c -I include -lm
+
+Run (set OMP threads, then use mpiexec):
+$env:OMP_NUM_THREADS = 4; mpiexec -n 1 ./convolution_hybrid images/input/test.jpg images/output/blur_hybrid.jpg blur
+$env:OMP_NUM_THREADS = 2; mpiexec -n 2 ./convolution_hybrid images/input/test.jpg images/output/blur_hybrid.jpg blur
+$env:OMP_NUM_THREADS = 1; mpiexec -n 4 ./convolution_hybrid images/input/test.jpg images/output/blur_hybrid.jpg blur
+$env:OMP_NUM_THREADS = 4; mpiexec -n 2 ./convolution_hybrid images/input/test.jpg images/output/blur_hybrid.jpg blur
+$env:OMP_NUM_THREADS = 2; mpiexec -n 4 ./convolution_hybrid images/input/test.jpg images/output/blur_hybrid.jpg blur
+
+========================================
+7. RMSE COMPARISON (vs Serial)
+========================================
+
+Compile:
+gcc -o rmse_compare scripts/rmse_compare.c src/image_utils.c -I include -lm
+
+Run (compare parallel output against serial baseline):
+./rmse_compare images/output/blur_serial.jpg images/output/blur_openmp.jpg
+./rmse_compare images/output/blur_serial.jpg images/output/blur_posix.jpg
+./rmse_compare images/output/blur_serial.jpg images/output/blur_mpi.jpg
+./rmse_compare images/output/blur_serial.jpg images/output/blur_cuda.jpg
+./rmse_compare images/output/blur_serial.jpg images/output/blur_hybrid.jpg
+
+========================================
+8. RUN ALL BENCHMARKS (automated script)
+========================================
+
+Run the full benchmark suite (compiles, runs all implementations, collects timings + RMSE):
+powershell -ExecutionPolicy Bypass -File .\scripts\run_all_benchmarks.ps1
+
+Results are saved to: benchmark_results.txt
+
+========================================
+9. GENERATE CHARTS (matplotlib)
+========================================
+
+Generate performance chart PNGs into report/figures/:
+C:\msys64\mingw64\bin\python.exe scripts/generate_charts.py
+
+========================================
+10. BUILD REPORT PDF
+========================================
+
+cd report
+& "C:\Users\Piyumal\AppData\Local\Programs\MiKTeX\miktex\bin\x64\pdflatex.exe" -interaction=nonstopmode "analysis_report piyu.tex"
+& "C:\Users\Piyumal\AppData\Local\Programs\MiKTeX\miktex\bin\x64\pdflatex.exe" -interaction=nonstopmode "analysis_report piyu.tex"
+cd ..
