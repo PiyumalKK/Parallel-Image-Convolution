@@ -12,24 +12,57 @@ export default function OpenMPAnimation() {
   const [threadPixels, setThreadPixels] = useState([0, 0, 0, 0])
   const [forkState, setForkState] = useState('single') // single → forked → joined
 
+  const intervalRef = useRef(null)
+
   useEffect(() => {
-    if (!isInView) { setThreadPixels([0,0,0,0]); setForkState('single'); return }
-    const t1 = setTimeout(() => setForkState('forked'), 800)
-    const interval = setInterval(() => {
-      setThreadPixels(prev => {
-        const next = prev.map(p => {
-          if (p >= ROWS_PER_THREAD * GRID) return ROWS_PER_THREAD * GRID
-          return p + 1
-        })
-        if (next.every(p => p >= ROWS_PER_THREAD * GRID)) {
-          setForkState('joined')
-          clearInterval(interval)
-          setTimeout(() => { setThreadPixels([0,0,0,0]); setForkState('single'); setTimeout(() => setForkState('forked'), 800) }, 2000)
-        }
-        return next
-      })
-    }, 150)
-    return () => { clearTimeout(t1); clearInterval(interval) }
+    if (!isInView) {
+      setThreadPixels([0,0,0,0])
+      setForkState('single')
+      if (intervalRef.current) clearInterval(intervalRef.current)
+      return
+    }
+
+    let timeouts = []
+
+    function runCycle() {
+      // Phase 1: Master thread serial work (2s)
+      setForkState('single')
+      setThreadPixels([0,0,0,0])
+
+      // Phase 2: Fork — threads appear AND grid starts filling together
+      const t1 = setTimeout(() => {
+        setForkState('forked')
+        // Start filling grid simultaneously with fork
+        intervalRef.current = setInterval(() => {
+          setThreadPixels(prev => {
+            const next = prev.map(p => {
+              if (p >= ROWS_PER_THREAD * GRID) return ROWS_PER_THREAD * GRID
+              return p + 1
+            })
+            if (next.every(p => p >= ROWS_PER_THREAD * GRID)) {
+              clearInterval(intervalRef.current)
+              // Phase 3: All done → Join (small delay to show completion)
+              const t3 = setTimeout(() => {
+                setForkState('joined')
+                // Phase 4: Master serial again, then restart cycle
+                const t4 = setTimeout(() => runCycle(), 3000)
+                timeouts.push(t4)
+              }, 600)
+              timeouts.push(t3)
+            }
+            return next
+          })
+        }, 200)
+      }, 2000)
+      timeouts.push(t1)
+    }
+
+    runCycle()
+
+    return () => {
+      timeouts.forEach(t => clearTimeout(t))
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
   }, [isInView])
 
   return (
@@ -47,22 +80,52 @@ export default function OpenMPAnimation() {
           {/* Fork-Join timeline */}
           <div className="mt-6 bg-gray-800/60 rounded-xl p-4 border border-gray-700/50">
             <p className="text-[10px] uppercase text-gray-500 mb-3">Fork-Join Model</p>
-            <div className="relative h-16">
-              {/* Main thread line */}
-              <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-gray-600 -translate-y-1/2" />
+            <div className="relative h-16 mt-1">
+              {/* Pragma directive above fork point */}
+              {forkState === 'forked' && (
+                <motion.p
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="absolute left-[15%] -top-5 text-[9px] font-mono text-blue-300 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20"
+                >#pragma omp parallel for</motion.p>
+              )}
+              {/* Main thread line (background) */}
+              <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-gray-700 -translate-y-1/2" />
+              {/* Master thread active BEFORE fork (serial region) */}
+              {forkState === 'single' && (
+                <motion.div
+                  initial={{ width: '0%' }}
+                  animate={{ width: '15%' }}
+                  transition={{ duration: 1.8, ease: 'linear' }}
+                  className="absolute top-1/2 left-0 h-1.5 rounded-full -translate-y-1/2 bg-blue-500"
+                />
+              )}
+              {/* Master thread active AFTER join (serial region) */}
+              {forkState === 'joined' && (
+                <motion.div
+                  initial={{ width: '0%' }}
+                  animate={{ width: '15%' }}
+                  transition={{ duration: 1.5, ease: 'linear' }}
+                  className="absolute top-1/2 right-0 h-1.5 rounded-full -translate-y-1/2 bg-blue-500"
+                />
+              )}
               {/* Fork point */}
-              <motion.div animate={{ scale: forkState === 'forked' ? [1, 1.3, 1] : 1 }}
-                transition={{ duration: 0.5 }}
-                className="absolute left-[15%] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-blue-400 z-10" />
+              <motion.div
+                animate={{ scale: forkState === 'forked' ? [1, 1.4, 1] : 1, backgroundColor: forkState !== 'single' ? '#60a5fa' : '#4b5563' }}
+                transition={{ duration: 0.6 }}
+                className="absolute left-[15%] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full z-10" />
               {/* Join point */}
-              <motion.div animate={{ scale: forkState === 'joined' ? [1, 1.3, 1] : 1 }}
-                className="absolute right-[15%] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-blue-400 z-10" />
-              {/* Thread lines */}
+              <motion.div
+                animate={{ scale: forkState === 'joined' ? [1, 1.4, 1] : 1, backgroundColor: forkState === 'joined' ? '#60a5fa' : '#4b5563' }}
+                transition={{ duration: 0.6 }}
+                className="absolute right-[15%] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full z-10" />
+              {/* Thread lines (parallel region) */}
               {forkState === 'forked' && COLORS.map((c, i) => (
                 <motion.div key={i}
-                  initial={{ scaleX: 0 }}
-                  animate={{ scaleX: 1 }}
-                  className="absolute h-0.5 origin-left"
+                  initial={{ scaleX: 0, opacity: 0 }}
+                  animate={{ scaleX: 1, opacity: 1 }}
+                  transition={{ duration: 0.6, delay: i * 0.1 }}
+                  className="absolute h-1 rounded-full origin-left"
                   style={{
                     left: '15%', right: '15%',
                     top: `${20 + i * 18}%`,

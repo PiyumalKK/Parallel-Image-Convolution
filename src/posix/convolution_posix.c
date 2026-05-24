@@ -36,17 +36,6 @@ float* generate_gaussian_kernel(int size, float sigma) {
     return kernel;
 }
 
-/*
- * Compute the recommended kernel size for a given sigma.
- * Returns the smallest odd integer >= 6*sigma + 1.
- */
-int gaussian_kernel_size(float sigma) {
-    int size = (int)ceilf(6.0f * sigma) + 1;
-    if (size % 2 == 0) size++;   // ensure odd
-    if (size < 3) size = 3;
-    return size;
-}
-
 // ─── Grayscale conversion helpers ────────────────────────────────────────────
 
 /*
@@ -282,11 +271,7 @@ int main(int argc, char *argv[]) {
 
     if (strcmp(argv[3], "blur") == 0) {
         float sigma = 7.0f;
-        /*
-         * FIX: kernel size derived from sigma using the 6σ rule.
-         * For σ=7 this gives 43 — large enough to avoid tail truncation.
-         */
-        kernel_size = gaussian_kernel_size(sigma);
+        kernel_size = 21;      // consistent with serial/openmp/mpi/cuda
         kernel      = generate_gaussian_kernel(kernel_size, sigma);
         if (!kernel) {
             fprintf(stderr, "ERROR: Failed to generate Gaussian kernel\n");
