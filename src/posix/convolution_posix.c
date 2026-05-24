@@ -36,72 +36,6 @@ float* generate_gaussian_kernel(int size, float sigma) {
     return kernel;
 }
 
-// ─── Grayscale conversion helpers ────────────────────────────────────────────
-
-/*
- * Convert an RGB image to single-channel grayscale (luminance).
- * Uses ITU-R BT.601 coefficients: Y = 0.299R + 0.587G + 0.114B
- * Returns a newly allocated single-channel Image, or NULL on failure.
- * Caller must free_image() the result.
- */
-Image* rgb_to_grayscale(Image *img) {
-    if (img->channels == 1) {
-        /* Already grayscale — return a deep copy */
-        Image *copy = (Image*)malloc(sizeof(Image));
-        if (!copy) return NULL;
-        copy->width    = img->width;
-        copy->height   = img->height;
-        copy->channels = 1;
-        size_t sz      = (size_t)img->width * img->height;
-        copy->data     = (unsigned char*)malloc(sz);
-        if (!copy->data) { free(copy); return NULL; }
-        memcpy(copy->data, img->data, sz);
-        return copy;
-    }
-
-    Image *gray = (Image*)malloc(sizeof(Image));
-    if (!gray) return NULL;
-    gray->width    = img->width;
-    gray->height   = img->height;
-    gray->channels = 1;
-    size_t sz      = (size_t)img->width * img->height;
-    gray->data     = (unsigned char*)malloc(sz);
-    if (!gray->data) { free(gray); return NULL; }
-
-    for (int i = 0; i < img->width * img->height; i++) {
-        float r = img->data[i * img->channels + 0];
-        float g = img->data[i * img->channels + 1];
-        float b = img->data[i * img->channels + 2];
-        gray->data[i] = (unsigned char)(0.299f*r + 0.587f*g + 0.114f*b);
-    }
-    return gray;
-}
-
-/*
- * Copy a single-channel grayscale image back into a 3-channel RGB image
- * by replicating the luminance into R, G, and B.
- * Returns a new Image, or NULL on failure.
- */
-Image* grayscale_to_rgb(Image *gray, int target_channels) {
-    if (target_channels == 1) {
-        return rgb_to_grayscale(gray);   /* trivial copy via existing helper */
-    }
-    Image *rgb = (Image*)malloc(sizeof(Image));
-    if (!rgb) return NULL;
-    rgb->width    = gray->width;
-    rgb->height   = gray->height;
-    rgb->channels = target_channels;
-    size_t sz     = (size_t)gray->width * gray->height * target_channels;
-    rgb->data     = (unsigned char*)malloc(sz);
-    if (!rgb->data) { free(rgb); return NULL; }
-
-    for (int i = 0; i < gray->width * gray->height; i++) {
-        for (int c = 0; c < target_channels; c++)
-            rgb->data[i * target_channels + c] = gray->data[i];
-    }
-    return rgb;
-}
-
 // ─── Per-pixel kernel application ────────────────────────────────────────────
 
 unsigned char apply_kernel(Image *img, int x, int y, int channel,
@@ -267,7 +201,6 @@ int main(int argc, char *argv[]) {
     float *kernel;
     int    kernel_size;
     int    is_blur      = 0;
-    int    is_edge      = 0;
 
     if (strcmp(argv[3], "blur") == 0) {
         float sigma = 7.0f;
@@ -283,7 +216,6 @@ int main(int argc, char *argv[]) {
     } else if (strcmp(argv[3], "edge") == 0) {
         kernel      = edge_detection_3x3;
         kernel_size = 3;
-        is_edge     = 1;
 
     } else {
         /* sharpen */
@@ -292,54 +224,10 @@ int main(int argc, char *argv[]) {
     }
 
     struct timespec start_time, end_time;
-    Image *output = NULL;
 
-    if (is_edge) {
-        /*
-         * FIX: Edge detection is a Laplacian operator that measures intensity
-         * gradients. It should be applied to a single luminance channel, not
-         * independently per colour channel, to avoid colour fringing artifacts.
-         *
-         * Workflow:
-         *   1. Convert to grayscale
-         *   2. Convolve the single-channel image
-         *   3. Expand back to the original channel count for saving
-         */
-        Image *gray = rgb_to_grayscale(input);
-        if (!gray) {
-            fprintf(stderr, "ERROR: Grayscale conversion failed\n");
-            free_image(input);
-            return 1;
-        }
-
-        clock_gettime(CLOCK_MONOTONIC, &start_time);
-        Image *edge_gray = convolve_posix(gray, kernel, kernel_size, num_threads);
-        clock_gettime(CLOCK_MONOTONIC, &end_time);
-
-        free_image(gray);
-
-        if (!edge_gray) {
-            fprintf(stderr, "ERROR: Edge convolution failed\n");
-            free_image(input);
-            return 1;
-        }
-
-        /* Replicate grayscale result into RGB so save_image works correctly */
-        output = grayscale_to_rgb(edge_gray, input->channels);
-        free_image(edge_gray);
-
-        if (!output) {
-            fprintf(stderr, "ERROR: Failed to expand edge result to RGB\n");
-            free_image(input);
-            return 1;
-        }
-
-    } else {
-        /* Blur and sharpen operate on all channels directly — no conversion needed */
-        clock_gettime(CLOCK_MONOTONIC, &start_time);
-        output = convolve_posix(input, kernel, kernel_size, num_threads);
-        clock_gettime(CLOCK_MONOTONIC, &end_time);
-    }
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+    Image *output = convolve_posix(input, kernel, kernel_size, num_threads);
+    clock_gettime(CLOCK_MONOTONIC, &end_time);
 
     if (!output) {
         fprintf(stderr, "ERROR: Convolution failed\n");
