@@ -67,14 +67,14 @@ __global__ void convolution_shared(unsigned char *input, unsigned char *output,
     int shared_width = TILE_WIDTH + 2 * half;
     int shared_height = TILE_HEIGHT + 2 * half;
 
-    // Dynamically allocated shared memory for the input tile
+    // Dynamically allocated shared memory for shared_mem_size bytes
     extern __shared__ unsigned char s_tile[];
 
-    // Output pixel coordinates
+    // Output pixel coordinates to compute for this thread
     int out_x = blockIdx.x * TILE_WIDTH + threadIdx.x;
     int out_y = blockIdx.y * TILE_HEIGHT + threadIdx.y;
 
-    // Load tile into shared memory (cooperative loading)
+    // Load block into shared memory (cooperative loading)
     // Each thread may need to load multiple elements to fill the halo
     for (int c = 0; c < channels; c++) {
         // Number of elements to load per channel
@@ -82,6 +82,7 @@ __global__ void convolution_shared(unsigned char *input, unsigned char *output,
         int threads_per_block = TILE_WIDTH * TILE_HEIGHT;
         int tid = threadIdx.y * TILE_WIDTH + threadIdx.x;
 
+        // according to the thread id, each thread will load multiple pixels into shared memory to cover the entire tile (including halo)
         for (int idx = tid; idx < tile_elems; idx += threads_per_block) {
             int ty = idx / shared_width;
             int tx = idx % shared_width;
@@ -94,19 +95,22 @@ __global__ void convolution_shared(unsigned char *input, unsigned char *output,
             img_x = max(0, min(img_x, width - 1));
             img_y = max(0, min(img_y, height - 1));
 
+            // Load pixel into shared memory by all threads in the block cooperatively
             s_tile[c * tile_elems + ty * shared_width + tx] =
                 input[(img_y * width + img_x) * channels + c];
         }
     }
 
-    // Synchronize to ensure all threads have loaded their data
+    // Synchronize to ensure all threads have loaded their data to shared memory before any thread accesses it
     __syncthreads();
 
-    // Compute convolution for this output pixel
+    // Check if this thread's output pixel is within image bounds
     if (out_x >= width || out_y >= height) return;
 
+    // Number of elements in the shared memory tile for one channel
     int tile_elems = shared_width * shared_height;
 
+    // Compute convolution for this output pixel using the shared memory tile and constant memory kernel
     for (int c = 0; c < channels; c++) {
         float sum = 0.0f;
 
@@ -125,19 +129,23 @@ __global__ void convolution_shared(unsigned char *input, unsigned char *output,
 
         // Clamp output to [0, 255]
         sum = fminf(fmaxf(sum, 0.0f), 255.0f);
+        // Write result to global memory
         int out_index = (out_y * width + out_x) * channels + c;
+        // Cast to unsigned char and write to output
         output[out_index] = (unsigned char)sum;
     }
 }
 
 // Main CUDA convolution function
 Image* convolve_cuda(Image *input, float *kern, int kernel_size) {
+    //reading the image's properties and calculating total memory needed.
     int width = input->width;
     int height = input->height;
     int channels = input->channels;
+    // Total size of the image data in bytes
     size_t img_size = width * height * channels * sizeof(unsigned char);
 
-    // Allocate output on host
+    // Creating an empty output image (same size as input) on the CPU to store the result later.
     Image *output = (Image*)malloc(sizeof(Image));
     output->width = width;
     output->height = height;
@@ -173,9 +181,9 @@ Image* convolve_cuda(Image *input, float *kern, int kernel_size) {
     // Launch kernel with shared memory tiling
     convolution_shared<<<grid, block, shared_mem_size>>>(
         d_input, d_output, width, height, channels, kernel_size);
-    // Check for kernel launch errors
+    //  check whether the GPU accept to run the kernel function and if there is any error during the kernel execution.
     CUDA_CHECK(cudaGetLastError());
-    // Synchronize to ensure kernel has finished before copying results back
+    // wait until finish all the threads in the kernel to finish their work before moving on to the next step. This is important to ensure that the output data is ready before we copy it back to the host.
     CUDA_CHECK(cudaDeviceSynchronize());
 
     // Copy result back to host (Device-to-Host transfer)
