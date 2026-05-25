@@ -173,7 +173,9 @@ Image* convolve_cuda(Image *input, float *kern, int kernel_size) {
     // Launch kernel with shared memory tiling
     convolution_shared<<<grid, block, shared_mem_size>>>(
         d_input, d_output, width, height, channels, kernel_size);
+    // Check for kernel launch errors
     CUDA_CHECK(cudaGetLastError());
+    // Synchronize to ensure kernel has finished before copying results back
     CUDA_CHECK(cudaDeviceSynchronize());
 
     // Copy result back to host (Device-to-Host transfer)
