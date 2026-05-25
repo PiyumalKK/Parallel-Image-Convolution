@@ -53,15 +53,16 @@ unsigned char apply_kernel(Image *img, int x, int y, int channel, float *kernel,
 
 // OpenMP parallel convolution
 Image* convolve_openmp(Image *input, float *kernel, int kernel_size) {
+    // Allocate output image
     Image *output = (Image*)malloc(sizeof(Image));
     output->width = input->width;
     output->height = input->height;
     output->channels = input->channels;
+    // Allocate the actual pixel data array:
     output->data = (unsigned char*)malloc(
         input->width * input->height * input->channels
     );
     // Parallelize the outer two loops across all available threads
-    // Using explicit shared/private clauses as per LLNL OpenMP tutorial best practices
 
 
     #pragma omp parallel for collapse(2) schedule(dynamic) \
